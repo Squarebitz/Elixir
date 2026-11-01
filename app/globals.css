@@ -59,6 +59,101 @@ body,
   overscroll-behavior: none;
 }
 
+.native-titlebar-win32:not(.is-fullscreen),
+.native-titlebar-linux:not(.is-fullscreen),
+.native-titlebar-darwin:not(.is-fullscreen) {
+  padding-top: 40px;
+}
+
+.native-window-drag-region {
+  position: fixed;
+  z-index: 80;
+  top: 0;
+  left: 0;
+  height: 40px;
+  -webkit-app-region: drag;
+}
+
+.native-titlebar-win32 .native-window-drag-region,
+.native-titlebar-linux .native-window-drag-region {
+  right: 140px;
+}
+
+.native-titlebar-darwin .native-window-drag-region {
+  right: 0;
+  left: 80px;
+}
+
+.native-titlebar-win32:not(.is-fullscreen) > nav[aria-label="Main navigation"],
+.native-titlebar-linux:not(.is-fullscreen) > nav[aria-label="Main navigation"] {
+  height: calc(100vh - 40px);
+}
+
+.fullscreen-top-drag-area {
+  position: fixed;
+  z-index: 90;
+  inset: 0 0 auto;
+  height: 8px;
+  -webkit-app-region: no-drag;
+}
+
+.fullscreen-exit-bar {
+  position: fixed;
+  z-index: 100;
+  top: 0.5rem;
+  left: 50%;
+  display: flex;
+  height: 2.5rem;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0 0.75rem 0 0.4rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.75rem;
+  background: hsl(var(--popover) / 92%);
+  color: hsl(var(--popover-foreground));
+  box-shadow: 0 8px 28px rgb(0 0 0 / 24%);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -10px);
+  transition: opacity 160ms ease, transform 160ms ease;
+  -webkit-app-region: no-drag;
+}
+
+.fullscreen-exit-bar.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, 0);
+}
+
+.fullscreen-exit-bar button {
+  display: grid;
+  width: 1.8rem;
+  height: 1.8rem;
+  place-items: center;
+  border: 0;
+  border-radius: 0.5rem;
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+}
+
+.fullscreen-exit-bar button:hover {
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+
+.fullscreen-exit-bar span {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fullscreen-exit-bar {
+    transition: none;
+  }
+}
+
 :focus:not(:focus-visible) {
   outline: none !important;
   box-shadow: none !important;

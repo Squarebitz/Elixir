@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, screen, shell } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, Menu, screen, shell } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
@@ -9,20 +9,6 @@ const windowStatePath = () => path.join(app.getPath("userData"), "window-state.j
 const vaultConfigPath = () => path.join(app.getPath("userData"), "vault.json");
 const defaultFolderId = "default-folder";
 const notePathIndex = new Map();
-const welcomeMarkdown = `# Welcome to Nerabit
-
-Nerabit is your personal space for notes, ideas, and plans.
-
-## Organize with folders
-Create folders in the sidebar for projects or topics. Use a folder's options to add notes or make nested subfolders to any depth. Expand a folder to see its notes and subfolders. You can reorder sibling folders or delete a folder from its options.
-
-## Write and navigate
-Create a note from the sidebar. Your changes save automatically. Type \`/\` in the editor to add headings, lists, checklists, quotes, and code blocks. Use the note tabs at the top to switch between notes.
-
-## Make it yours
-Choose an icon for your notes and resize or collapse the sidebar whenever you like.
-
-You can edit or delete this welcome note at any time.`;
 
 function readVaultConfig() {
   try {
@@ -394,20 +380,6 @@ function ensureVaultInitialized(root) {
   if (!fs.existsSync(treePath)) {
     saveFolderTree(root, [{ id: defaultFolderId, name: "Notes", position: 0 }]);
   }
-  if (listMarkdownFiles(root).length === 0) {
-    const now = new Date().toISOString();
-    const markdown = `---\n${stringifyYaml({
-      id: "welcome-note",
-      title: "Welcome",
-      kind: "notes",
-      folderId: defaultFolderId,
-      position: 0,
-      propertyOrder: [],
-      createdAt: now,
-      updatedAt: now,
-    })}---\n${welcomeMarkdown}`;
-    writeAtomic(root, "Welcome.md", markdown);
-  }
 }
 
 ipcMain.handle("vault:get-path", (_event, action) => {
@@ -720,6 +692,7 @@ function readWindowState() {
     return {
       ...(isVisible ? bounds : { width: saved.width, height: saved.height }),
       maximized: saved.maximized === true,
+      fullScreen: saved.fullScreen === true,
     };
   } catch (error) {
     if (error.code !== "ENOENT") {
@@ -731,11 +704,15 @@ function readWindowState() {
 
 function saveWindowState(window) {
   if (window.isDestroyed()) return;
-  const bounds = window.isMaximized() ? window.getNormalBounds() : window.getBounds();
+  const fullScreen = window.isFullScreen();
+  // Keep the normal bounds, and record full screen without restoring it at launch.
+  const bounds = window.isMaximized() || fullScreen
+    ? window.getNormalBounds()
+    : window.getBounds();
   try {
     fs.writeFileSync(
       windowStatePath(),
-      JSON.stringify({ ...bounds, maximized: window.isMaximized() }),
+      JSON.stringify({ ...bounds, maximized: window.isMaximized(), fullScreen }),
     );
   } catch (error) {
     console.error("Could not save the window state:", error);
@@ -744,7 +721,20 @@ function saveWindowState(window) {
 
 function createWindow() {
   const savedState = readWindowState();
+  const isMac = process.platform === "darwin";
   const window = new BrowserWindow({
+    title: "nerabit",
+    titleBarStyle: "hidden",
+    ...(isMac
+      ? { trafficLightPosition: { x: 16, y: 14 } }
+      : {
+          titleBarOverlay: {
+            color: "#0b0d12",
+            symbolColor: "#ffffff",
+            height: 40,
+          },
+        }),
+    autoHideMenuBar: true,
     width: savedState.width ?? 1280,
     height: savedState.height ?? 820,
     ...(savedState.x !== undefined ? { x: savedState.x } : {}),
@@ -761,9 +751,16 @@ function createWindow() {
     },
   });
 
-  if (savedState.maximized) window.maximize();
+  if (savedState.maximized && !savedState.fullScreen) window.maximize();
   window.once("ready-to-show", () => window.show());
   window.on("close", () => saveWindowState(window));
+  const sendFullScreenState = () => {
+    window.webContents.send("window:full-screen-changed", window.isFullScreen());
+  };
+  window.on("enter-full-screen", sendFullScreenState);
+  window.on("leave-full-screen", sendFullScreenState);
+  window.on("enter-html-full-screen", sendFullScreenState);
+  window.on("leave-html-full-screen", sendFullScreenState);
   window.webContents.setVisualZoomLevelLimits(1, 1);
   window.webContents.session.setSpellCheckerEnabled(true);
   if (window.webContents.session.availableSpellCheckerLanguages.includes("en-US")) {
@@ -781,6 +778,27 @@ function createWindow() {
     if (!isDevelopment && reloadShortcut && input.key.toLowerCase() === "r") {
       event.preventDefault();
     }
+    if (
+      reloadShortcut &&
+      input.shift &&
+      input.type === "keyDown" &&
+      input.key.toLowerCase() === "i"
+    ) {
+      if (isDevelopment) window.webContents.toggleDevTools();
+      event.preventDefault();
+    }
+    if (input.key === "F11") {
+      event.preventDefault();
+      window.setFullScreen(!window.isFullScreen());
+    } else if (
+      process.platform === "darwin" &&
+      input.control &&
+      input.meta &&
+      input.key.toLowerCase() === "f"
+    ) {
+      event.preventDefault();
+      window.setFullScreen(!window.isFullScreen());
+    }
   });
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith("https://") || url.startsWith("http://")) {
@@ -795,6 +813,52 @@ function createWindow() {
     void window.loadFile(path.join(__dirname, "..", "dist", "index.html"));
   }
 }
+
+ipcMain.handle("window:set-theme", (event, theme) => {
+  if (theme !== "dark" && theme !== "light") {
+    throw new Error("The requested window theme is invalid.");
+  }
+  const window = BrowserWindow.fromWebContents(event.sender);
+  if (!window || process.platform === "darwin") return;
+  window.setTitleBarOverlay({
+    color: theme === "dark" ? "#0b0d12" : "#f4f4f5",
+    symbolColor: theme === "dark" ? "#ffffff" : "#242424",
+  });
+});
+
+ipcMain.handle("window:is-full-screen", (event) =>
+  BrowserWindow.fromWebContents(event.sender)?.isFullScreen() ?? false,
+);
+
+ipcMain.handle("window:toggle-full-screen", (event) => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  if (!window) return false;
+  window.setFullScreen(!window.isFullScreen());
+  return window.isFullScreen();
+});
+
+ipcMain.handle("window:exit-full-screen", (event) => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  if (!window) return false;
+  if (window.isFullScreen()) window.setFullScreen(false);
+  return true;
+});
+
+ipcMain.on("window:toggle-maximize", (event) => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  if (!window) return;
+  const toggleMaximize = () => {
+    if (window.isDestroyed()) return;
+    if (window.isMaximized()) window.unmaximize();
+    else window.maximize();
+  };
+  if (window.isFullScreen()) {
+    window.once("leave-full-screen", toggleMaximize);
+    window.setFullScreen(false);
+  } else {
+    toggleMaximize();
+  }
+});
 
 ipcMain.on("spellcheck:replace", (event, word) => {
   if (typeof word === "string") {
@@ -841,6 +905,23 @@ ipcMain.handle("image:save-as", async (event, dataUrl) => {
 });
 
 app.whenReady().then(() => {
+  Menu.setApplicationMenu(null);
+  if (process.platform === "darwin") {
+    Menu.setApplicationMenu(Menu.buildFromTemplate([
+      {
+        label: "Edit",
+        submenu: [
+          { role: "undo" },
+          { role: "redo" },
+          { type: "separator" },
+          { role: "cut" },
+          { role: "copy" },
+          { role: "paste" },
+          { role: "selectAll" },
+        ],
+      },
+    ]));
+  }
   createWindow();
 
   app.on("activate", () => {

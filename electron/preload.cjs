@@ -1,6 +1,7 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("nerabitDesktop", {
+  platform: process.platform,
   chooseVaultFolder(path) {
     return ipcRenderer.invoke("vault:choose-folder", path);
   },
@@ -30,6 +31,26 @@ contextBridge.exposeInMainWorld("nerabitDesktop", {
   },
   deleteFolder(id) {
     return ipcRenderer.invoke("vault:delete-folder", id);
+  },
+  isFullScreen() {
+    return ipcRenderer.invoke("window:is-full-screen");
+  },
+  toggleFullScreen() {
+    return ipcRenderer.invoke("window:toggle-full-screen");
+  },
+  exitFullScreen() {
+    return ipcRenderer.invoke("window:exit-full-screen");
+  },
+  onFullScreenChange(callback) {
+    const listener = (_event, fullScreen) => callback(fullScreen);
+    ipcRenderer.on("window:full-screen-changed", listener);
+    return () => ipcRenderer.removeListener("window:full-screen-changed", listener);
+  },
+  toggleWindowMaximize() {
+    ipcRenderer.send("window:toggle-maximize");
+  },
+  setTheme(theme) {
+    return ipcRenderer.invoke("window:set-theme", theme);
   },
   getWordSuggestions(word) {
     return ipcRenderer.invoke("spellcheck:get-word-suggestions", word);

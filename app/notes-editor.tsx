@@ -274,6 +274,8 @@ export function NotesEditor({
   onAddSelectionAsNote,
   storage,
   onStorageError,
+  previewMode = false,
+  onRequestEdit,
 }: {
   content: string;
   onChange: (markdown: string) => void;
@@ -282,6 +284,8 @@ export function NotesEditor({
   onAddSelectionAsNote: (selection: string) => void;
   storage: NoteStorage;
   onStorageError: (message: string) => void;
+  previewMode?: boolean;
+  onRequestEdit?: () => void;
 }) {
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [linkSearch, setLinkSearch] = useState("");
@@ -368,9 +372,11 @@ export function NotesEditor({
     content,
     contentType: "markdown",
     immediatelyRender: false,
+    editable: !previewMode,
     editorProps: {
       attributes: { "aria-label": "Notes editor", spellcheck: "true" },
       handleKeyDown: (_view, event) => {
+        if (previewMode) return false;
         if (
           (event.ctrlKey || event.metaKey) &&
           !event.altKey &&
@@ -384,6 +390,11 @@ export function NotesEditor({
         return false;
       },
       handleDoubleClick: (view, position, event) => {
+        if (previewMode) {
+          onRequestEdit?.();
+          event.preventDefault();
+          return true;
+        }
         if (event.target instanceof HTMLImageElement) {
           setImagePreview(event.target.currentSrc || event.target.src);
           setPreviewScale(1);
@@ -478,6 +489,15 @@ export function NotesEditor({
     onUpdate: ({ editor: currentEditor }) => onChange(currentEditor.getMarkdown()),
   });
   editorRef.current = editor;
+
+  useEffect(() => {
+    editor?.setEditable(!previewMode);
+    if (previewMode) {
+      setWordSuggestions(null);
+      setSpellcheck(null);
+      setContextMenuOpen(false);
+    }
+  }, [editor, previewMode]);
 
   useEffect(() => {
     if (!editor || editor.getMarkdown() === content) return;
@@ -750,9 +770,11 @@ export function NotesEditor({
         <ContextMenuTrigger
           className="block"
           onMouseUp={() => {
+            if (previewMode) return;
             window.setTimeout(() => void checkSelectedWord(), 0);
           }}
           onKeyUp={(event) => {
+            if (previewMode) return;
             if (event.shiftKey || event.key.startsWith("Arrow")) {
               window.setTimeout(() => void checkSelectedWord(), 0);
             } else {
@@ -762,6 +784,10 @@ export function NotesEditor({
           }}
           onContextMenu={(event) => {
             event.preventDefault();
+            if (previewMode) {
+              setContextMenuOpen(false);
+              return;
+            }
             const target = event.target;
             const image = target instanceof Element ? target.closest("img") : null;
             if (image instanceof HTMLImageElement) {
@@ -925,7 +951,7 @@ export function NotesEditor({
           </ContextMenuContent>
         )}
       </ContextMenu>
-      {wordSuggestions && (
+      {!previewMode && wordSuggestions && (
         <div
           className="spell-suggestion-menu fixed z-[80] min-w-56 rounded-lg border border-white/[0.1] bg-[#191c26] p-1.5 font-mono text-xs shadow-xl"
           style={{ left: wordSuggestions.left, top: wordSuggestions.top }}
@@ -957,7 +983,7 @@ export function NotesEditor({
           </button>
         </div>
       )}
-      {editor && (
+      {editor && !previewMode && (
         <div className="fixed bottom-4 right-4 z-40 flex items-center justify-end gap-3 rounded-lg border border-white/[0.08] bg-[#11141c]/95 px-3 py-2 text-[11px] text-[#9298a9] shadow-lg">
           <span aria-live="polite">
             {characterCount} characters (including spaces) · {wordCount} words
@@ -979,7 +1005,7 @@ export function NotesEditor({
           </button>
         </div>
       )}
-      {editor && (
+      {editor && !previewMode && (
         <BubbleMenu
           editor={editor}
           shouldShow={({ state }) =>

@@ -1,5 +1,6 @@
 import {
   AlignHorizontalDistributeCenter,
+  BookOpen,
   Bookmark,
   ChevronDown,
   ChevronRight,
@@ -9,8 +10,10 @@ import {
   FilePlus2,
   Folder,
   FolderPlus,
+  Maximize2,
   MoveRight,
   MoreHorizontal,
+  Pencil,
   PanelLeftClose,
   PanelLeftOpen,
   Search,
@@ -188,20 +191,21 @@ function SidebarNoteItem({
           aria-current={selected ? "page" : undefined}
           onClick={() => actions.onOpenNote(note.id)}
           style={{ paddingLeft }}
-          className={`block w-full truncate rounded-md py-2 pr-2 text-left text-xs transition-colors ${
+          title={note.title || "Untitled"}
+          className={`flex min-w-0 w-full items-center rounded-md py-2 pr-2 text-left text-xs transition-colors ${
             selected
               ? "bg-white/[0.06] text-[#e8eaf0]"
               : "text-[#aeb3c1] hover:bg-white/[0.04] hover:text-white"
           }`}
         />}>
           {isBookmarked && <Bookmark className="mr-1 inline h-3 w-3" />}
-          <span className="inline-flex min-w-0 items-center gap-1.5 align-middle">
+          <span className="inline-flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden align-middle">
             {note.icon ? (
               <NoteIcon value={note.icon} className="h-4 w-4 shrink-0" />
             ) : (
               <FileText className="h-3.5 w-3.5 shrink-0 opacity-60" />
             )}
-            <span className="truncate">{note.title || "Untitled"}</span>
+            <span className="min-w-0 flex-1 truncate">{note.title || "Untitled"}</span>
           </span>
         </ContextMenuTrigger>
         <ContextMenuContent className="min-w-52 font-mono text-xs">
@@ -384,8 +388,8 @@ function FolderItem({
   const notes = allNotes.filter((note) => note.folderId === folder.id);
   const expanded = expandedFolders.has(folder.id);
   const selected =
-    selectedFolderId === folder.id ||
-    allNotes.some((note) => note.id === openNoteId && note.folderId === folder.id);
+    selectedFolderId === folder.id &&
+    !allNotes.some((note) => note.id === openNoteId && note.folderId === folder.id);
   const contextItems = [
     { label: "New note", icon: <FilePlus2 />, action: () => onCreateNote(folder.id), group: 1 },
     { label: "New folder", icon: <FolderPlus />, action: () => onCreateSubfolder(folder.id), group: 1 },
@@ -473,6 +477,7 @@ function FolderItem({
         ) : <button
           type="button"
           aria-label={folder.name}
+          title={folder.name}
           aria-current={selected ? "page" : undefined}
           draggable={folder.id !== DEFAULT_FOLDER_ID}
           onDragStart={(event) => {
@@ -1226,6 +1231,21 @@ function SettingsOverlay({
                     : "Settings are saved in this browser and apply to your Nerabit workspace."}
                 </p>
               </div>
+              {window.nerabitDesktop && (
+                <div className="rounded-xl border border-white/[0.08] bg-[#0c0f15] p-5">
+                  <h3 className="text-sm font-medium text-[#e8eaf0]">Keyboard shortcuts</h3>
+                  <dl className="mt-3 space-y-3 text-xs">
+                    <div className="flex items-center justify-between gap-4">
+                      <dt className="text-[#858b9c]">Toggle full screen</dt>
+                      <dd className="text-[#d4d7e0]">F11 <span className="text-[#73798a]">(Ctrl+⌘+F on Mac)</span></dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-4">
+                      <dt className="text-[#858b9c]">Exit full screen</dt>
+                      <dd className="text-[#d4d7e0]">Esc</dd>
+                    </div>
+                  </dl>
+                </div>
+              )}
             </div>
           )}
 
@@ -1630,6 +1650,24 @@ function NotesPage({
   onConvertLegacy: (noteId: string) => void;
 }) {
   const editorContainerRef = useRef<HTMLDivElement>(null);
+  const [previewMode, setPreviewMode] = useState(false);
+
+  useEffect(() => {
+    function togglePreview(event: KeyboardEvent) {
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        event.shiftKey &&
+        !event.altKey &&
+        event.key.toLowerCase() === "p"
+      ) {
+        event.preventDefault();
+        setPreviewMode((current) => !current);
+      }
+    }
+
+    document.addEventListener("keydown", togglePreview);
+    return () => document.removeEventListener("keydown", togglePreview);
+  }, []);
 
   return (
     <div
@@ -1651,35 +1689,73 @@ function NotesPage({
               {folderName} /
             </span>
             <NoteIcon value={block.icon} className="h-4 w-4 shrink-0" />
-            <input
-              value={block.title}
-              onChange={(event) => onUpdateTitle(block.id, event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  editorContainerRef.current
-                    ?.querySelector<HTMLElement>('[contenteditable="true"]')
-                    ?.focus();
-                }
-              }}
-              aria-label="Page title"
-              placeholder="Untitled"
-              className="min-w-0 flex-1 truncate bg-transparent text-sm font-medium text-[#e8eaf0] outline-none placeholder:text-[#616777] focus:text-white"
-            />
+            {previewMode ? (
+              <span className="min-w-0 flex-1 truncate text-sm font-medium text-[#e8eaf0]">
+                {block.title || "Untitled"}
+              </span>
+            ) : (
+              <input
+                value={block.title}
+                onChange={(event) => onUpdateTitle(block.id, event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    editorContainerRef.current
+                      ?.querySelector<HTMLElement>('[contenteditable="true"]')
+                      ?.focus();
+                  }
+                }}
+                aria-label="Page title"
+                placeholder="Untitled"
+                className="min-w-0 flex-1 truncate bg-transparent text-sm font-medium text-[#e8eaf0] outline-none placeholder:text-[#616777] focus:text-white"
+              />
+            )}
           </div>
-          <BlockOptions
-            blockId={block.id}
-            title={block.title || "Untitled"}
-            position={position}
-            blockCount={blockCount}
-            onDelete={onDelete}
-            onMove={onMove}
-            onSplit={onSplit}
-          />
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              type="button"
+              aria-label="Edit note"
+              aria-pressed={!previewMode}
+              title="Edit note"
+              onClick={() => setPreviewMode(false)}
+              className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors ${
+                !previewMode
+                  ? "bg-white/[0.08] text-[#c9c1ff]"
+                  : "text-[#858b9c] hover:bg-white/[0.06] hover:text-white"
+              }`}
+            >
+              <Pencil className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              aria-label="Preview note"
+              aria-pressed={previewMode}
+              title="Preview note (Ctrl/Cmd+Shift+P)"
+              onClick={() => setPreviewMode(true)}
+              className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors ${
+                previewMode
+                  ? "bg-white/[0.08] text-[#c9c1ff]"
+                  : "text-[#858b9c] hover:bg-white/[0.06] hover:text-white"
+              }`}
+            >
+              <BookOpen className="h-4 w-4" />
+            </button>
+            {!previewMode && (
+              <BlockOptions
+                blockId={block.id}
+                title={block.title || "Untitled"}
+                position={position}
+                blockCount={blockCount}
+                onDelete={onDelete}
+                onMove={onMove}
+                onSplit={onSplit}
+              />
+            )}
+          </div>
         </div>
         <nav
           aria-label="Notes in this folder"
-          className="mx-auto mt-8 flex max-w-5xl gap-1 overflow-x-auto px-5 sm:px-8"
+          className="mx-auto mt-2 flex max-w-5xl gap-1 overflow-x-auto px-5 sm:px-8"
         >
           {notes.map((note) => (
             <button
@@ -1702,45 +1778,80 @@ function NotesPage({
           ))}
         </nav>
       </header>
-      <main className={`mx-auto ${isSplit ? "min-h-0" : "min-h-[calc(100vh-4rem)]"} max-w-5xl px-6 pb-40 pt-10 sm:px-10 sm:pt-12`}>
+      <main
+        className={`mx-auto ${isSplit ? "min-h-0" : "min-h-[calc(100vh-4rem)]"} max-w-5xl px-6 pb-40 pt-10 sm:px-10 sm:pt-12`}
+        onDoubleClick={() => {
+          if (previewMode) setPreviewMode(false);
+        }}
+      >
         <div className="mb-4">
           <div className="group/title relative mx-auto max-w-3xl">
-            <IconPicker
-              value={block.icon}
-              onChange={(icon) => onUpdateIcon(block.id, icon)}
-              triggerLabel={block.icon ? "Change note icon" : "Add icon"}
-              iconClassName="h-16 w-16 text-5xl"
-              triggerClassName={`note-icon-trigger rounded-xl text-muted-foreground ${
-                block.icon
-                  ? "mb-2 p-0 text-foreground"
-                  : "note-icon-add absolute -top-9 left-0 px-2 py-1 text-xs opacity-0 group-hover/title:opacity-100"
-              }`}
-            />
-          <AutoResizeTextarea
-            value={block.title}
-            onChange={(title) => onUpdateTitle(block.id, title)}
-            label="Edit page title"
-            placeholder="Untitled"
-            onEnter={() =>
-              editorContainerRef.current
-                ?.querySelector<HTMLElement>('[contenteditable="true"]')
-                ?.focus()
-            }
-            className="w-full bg-transparent text-3xl font-semibold leading-tight tracking-tight text-[#f0efff] outline-none placeholder:text-[#616777] sm:text-4xl"
-          />
-          <NoteProperties
-            noteId={block.id}
-            properties={block.properties}
-            propertyOrder={block.propertyOrder}
-            storage={storage}
-            existingNotes={existingNotes}
-            onChange={(update) => onUpdateProperties(block.id, update)}
-            onFilter={onFilterProperty}
-            onOpenRelatedNote={onOpenRelatedNote}
-            onStorageError={onStorageError}
-            legacyProperties={block.legacyProperties}
-            onConvertLegacy={() => onConvertLegacy(block.id)}
-          />
+            {!previewMode && (
+              <IconPicker
+                value={block.icon}
+                onChange={(icon) => onUpdateIcon(block.id, icon)}
+                triggerLabel={block.icon ? "Change note icon" : "Add icon"}
+                iconClassName="h-16 w-16 text-5xl"
+                triggerClassName={`note-icon-trigger rounded-xl text-muted-foreground ${
+                  block.icon
+                    ? "mb-2 p-0 text-foreground"
+                    : "note-icon-add absolute -top-9 left-0 px-2 py-1 text-xs opacity-0 group-hover/title:opacity-100"
+                }`}
+              />
+            )}
+            {previewMode && block.icon && (
+              <NoteIcon value={block.icon} className="mb-2 h-16 w-16 text-5xl" />
+            )}
+            {previewMode ? (
+              <h1 className="text-3xl font-semibold leading-tight tracking-tight text-[#f0efff] sm:text-4xl">
+                {block.title || "Untitled"}
+              </h1>
+            ) : (
+              <AutoResizeTextarea
+                value={block.title}
+                onChange={(title) => onUpdateTitle(block.id, title)}
+                label="Edit page title"
+                placeholder="Untitled"
+                onEnter={() =>
+                  editorContainerRef.current
+                    ?.querySelector<HTMLElement>('[contenteditable="true"]')
+                    ?.focus()
+                }
+                className="w-full bg-transparent text-3xl font-semibold leading-tight tracking-tight text-[#f0efff] outline-none placeholder:text-[#616777] sm:text-4xl"
+              />
+            )}
+            {!previewMode ? (
+              <NoteProperties
+                noteId={block.id}
+                properties={block.properties}
+                propertyOrder={block.propertyOrder}
+                storage={storage}
+                existingNotes={existingNotes}
+                onChange={(update) => onUpdateProperties(block.id, update)}
+                onFilter={onFilterProperty}
+                onOpenRelatedNote={onOpenRelatedNote}
+                onStorageError={onStorageError}
+                legacyProperties={block.legacyProperties}
+                onConvertLegacy={() => onConvertLegacy(block.id)}
+              />
+            ) : (
+              Object.entries(block.properties).length > 0 && (
+                <dl className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs">
+                  {Object.entries(block.properties).map(([key, value]) => (
+                    <div key={key} className="flex gap-2">
+                      <dt className="text-[#73798a]">{key}</dt>
+                      <dd className="text-[#aeb3c1]">
+                        {Array.isArray(value)
+                          ? value.join(", ")
+                          : typeof value === "object" && value !== null
+                            ? JSON.stringify(value)
+                            : String(value)}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              )
+            )}
           {storageError && (
             <p role="alert" className="mt-2 text-xs text-destructive">
               Could not save your changes: {storageError}
@@ -1757,10 +1868,14 @@ function NotesPage({
             onAddSelectionAsNote={onAddSelectionAsNote}
             storage={storage}
             onStorageError={onStorageError}
+            previewMode={previewMode}
+            onRequestEdit={() => setPreviewMode(false)}
           />
-          <p className="mt-8 text-[11px] text-[#656b7a]">
-            Type / to insert a block
-          </p>
+          {!previewMode && (
+            <p className="mt-8 text-[11px] text-[#656b7a]">
+              Type / to insert a block
+            </p>
+          )}
         </div>
       </main>
     </div>
@@ -1916,6 +2031,10 @@ export default function DashboardPage({
   const [preferences, setPreferences] = useState(DEFAULT_PREFERENCES);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [isFullScreen, setIsFullScreen] = useState(false);
+  const [showFullScreenBar, setShowFullScreenBar] = useState(false);
+  const fullScreenRef = useRef(false);
+  const fullScreenBarTimer = useRef<number | null>(null);
   const addMenuRef = useRef<HTMLDivElement>(null);
   const blocksRef = useRef<DashboardBlock[]>([]);
   const folderIconsRef = useRef<Record<string, string>>({});
@@ -1944,6 +2063,79 @@ export default function DashboardPage({
   const selectedFolderSubfolders = folders.filter(
     (folder) => folder.parentId === selectedFolderId,
   );
+
+  useEffect(() => {
+    const desktop = window.nerabitDesktop;
+    if (!desktop) return;
+    let active = true;
+
+    function showExitHint() {
+      setShowFullScreenBar(true);
+      if (fullScreenBarTimer.current !== null) {
+        window.clearTimeout(fullScreenBarTimer.current);
+      }
+      fullScreenBarTimer.current = window.setTimeout(() => {
+        setShowFullScreenBar(false);
+        fullScreenBarTimer.current = null;
+      }, 2000);
+    }
+
+    function updateFullScreen(fullScreen: boolean) {
+      if (!active) return;
+      setIsFullScreen(fullScreen);
+      if (fullScreen && !fullScreenRef.current) {
+        const key = "nerabit-fullscreen-hint-count";
+        const count = Number(window.localStorage.getItem(key) ?? 0);
+        if (count < 3) {
+          window.localStorage.setItem(key, String(count + 1));
+          showExitHint();
+        }
+      } else if (!fullScreen) {
+        setShowFullScreenBar(false);
+        if (fullScreenBarTimer.current !== null) {
+          window.clearTimeout(fullScreenBarTimer.current);
+          fullScreenBarTimer.current = null;
+        }
+      }
+      fullScreenRef.current = fullScreen;
+    }
+
+    const unsubscribe = desktop.onFullScreenChange(updateFullScreen);
+    void desktop.isFullScreen().then(updateFullScreen).catch((error: unknown) => {
+      console.error("Could not read full-screen state:", error);
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+      if (fullScreenBarTimer.current !== null) {
+        window.clearTimeout(fullScreenBarTimer.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const desktop = window.nerabitDesktop;
+    if (!desktop) return;
+
+    function exitFullScreenOnEscape(event: KeyboardEvent) {
+      if (event.key !== "Escape" || !fullScreenRef.current) return;
+      const blockingUi = Array.from(document.querySelectorAll(
+        '[role="dialog"], [role="menu"], [data-slot="dialog-content"], [data-slot$="-menu-content"], [data-slot="popover-content"], [data-slot="command-input"], input[type="search"], input[aria-label*="Search" i]',
+      )).some((element) =>
+        element.getClientRects().length > 0 &&
+        getComputedStyle(element).visibility !== "hidden",
+      );
+      if (blockingUi) return;
+      event.preventDefault();
+      void window.nerabitDesktop?.exitFullScreen().catch((error: unknown) => {
+        console.error("Could not exit full screen:", error);
+      });
+    }
+
+    document.addEventListener("keydown", exitFullScreenOnEscape);
+    return () => document.removeEventListener("keydown", exitFullScreenOnEscape);
+  }, []);
   const hasAnyNotes = blocks.some((block) => block.type === "notes");
   const noteSearch = useMemo(
     () =>
@@ -2127,12 +2319,15 @@ export default function DashboardPage({
 
     const mediaQuery = window.matchMedia("(prefers-color-scheme: light)");
     const applyTheme = () => {
-      document.documentElement.dataset.theme =
-        preferences.theme === "system"
-          ? mediaQuery.matches
-            ? "light"
-            : "dark"
-          : preferences.theme;
+      const theme = preferences.theme === "system"
+        ? mediaQuery.matches
+          ? "light"
+          : "dark"
+        : preferences.theme;
+      document.documentElement.dataset.theme = theme;
+      void window.nerabitDesktop?.setTheme(theme).catch((error: unknown) => {
+        console.error("Could not update the native title bar theme:", error);
+      });
     };
 
     applyTheme();
@@ -2161,9 +2356,22 @@ export default function DashboardPage({
         const storedNotes = await Promise.all(
           summaries.map(({ id }) => storage.readNote(id)),
         );
+        const defaultWelcomeNoteIds = new Set(
+          storedNotes.flatMap((note) =>
+            note?.kind === "notes" &&
+            note.title === WELCOME_NOTE_TITLE &&
+            note.markdown === WELCOME_NOTE_MARKDOWN
+              ? [note.id]
+              : [],
+          ),
+        );
+        await Promise.all(
+          Array.from(defaultWelcomeNoteIds, (id) => storage.deleteNote(id)),
+        );
         const loadedBlocksWithPreviews = await Promise.all(
           storedNotes.map(async (note) =>
             note
+              && !defaultWelcomeNoteIds.has(note.id)
               ? noteToBlock(
                   note,
                   note.kind === "notes"
@@ -2329,13 +2537,13 @@ export default function DashboardPage({
     commitBlocks([...blocksRef.current, block]);
   }
 
-  function createNote(folderId: string, welcome = false) {
+  function createNote(folderId: string) {
     const block: NotesBlock = {
       id: crypto.randomUUID(),
       type: "notes",
-      title: welcome ? WELCOME_NOTE_TITLE : "",
+      title: "",
       folderId,
-      content: welcome ? WELCOME_NOTE_MARKDOWN : "",
+      content: "",
       preview: "",
       properties: {},
       propertyOrder: [],
@@ -2540,13 +2748,10 @@ export default function DashboardPage({
     };
 
     try {
-      const isFirstEmptyFolder =
-        folders.length === 0 && blocksRef.current.length === 0;
       await storage.createFolder(folder);
       setFolders((currentFolders) => [...currentFolders, folder]);
       setSelectedFolderId(folder.id);
       setStorageError(null);
-      if (isFirstEmptyFolder) createNote(folder.id, true);
       return true;
     } catch (error) {
       setStorageError(describeError(error));
@@ -2988,7 +3193,62 @@ export default function DashboardPage({
   if (!isLoaded) return <main className="min-h-screen" />;
 
   return (
-    <div className="flex min-h-screen flex-col md:flex-row">
+    <div className={`flex min-h-screen flex-col md:flex-row${isFullScreen ? " is-fullscreen" : ""}${window.nerabitDesktop ? ` native-titlebar-${window.nerabitDesktop.platform}` : ""}`}>
+      {window.nerabitDesktop && !isFullScreen && (
+        <div
+          className="native-window-drag-region"
+          aria-hidden="true"
+          onDoubleClick={() => window.nerabitDesktop?.toggleWindowMaximize()}
+        />
+      )}
+      {isFullScreen && window.nerabitDesktop && (
+        <>
+          <div
+            className="fullscreen-top-drag-area"
+            aria-hidden="true"
+            onMouseEnter={() => {
+              setShowFullScreenBar(true);
+              if (fullScreenBarTimer.current !== null) {
+                window.clearTimeout(fullScreenBarTimer.current);
+              }
+              fullScreenBarTimer.current = window.setTimeout(() => {
+                setShowFullScreenBar(false);
+                fullScreenBarTimer.current = null;
+              }, 1500);
+            }}
+            onDoubleClick={() => window.nerabitDesktop?.toggleWindowMaximize()}
+          />
+          <div
+            className={`fullscreen-exit-bar${showFullScreenBar ? " is-visible" : ""}`}
+            onMouseEnter={() => {
+              if (fullScreenBarTimer.current !== null) {
+                window.clearTimeout(fullScreenBarTimer.current);
+                fullScreenBarTimer.current = null;
+              }
+            }}
+            onMouseLeave={() => {
+              fullScreenBarTimer.current = window.setTimeout(() => {
+                setShowFullScreenBar(false);
+                fullScreenBarTimer.current = null;
+              }, 1500);
+            }}
+          >
+            <button
+              type="button"
+              aria-label="Exit full screen (F11)"
+              title="Exit full screen (F11)"
+              onClick={() => {
+                void window.nerabitDesktop?.exitFullScreen().catch((error: unknown) => {
+                  console.error("Could not exit full screen:", error);
+                });
+              }}
+            >
+              <X className="h-4 w-4" />
+            </button>
+            <span>Press F11 or Esc</span>
+          </div>
+        </>
+      )}
       <WorkspaceRail
         activeSection={activeSection}
         onSelectSection={setActiveSection}
@@ -3466,6 +3726,22 @@ export default function DashboardPage({
           <CommandList>
             <CommandEmpty>No notes or commands found.</CommandEmpty>
             <CommandGroup heading="Actions">
+              {window.nerabitDesktop && (
+                <CommandItem
+                  value="toggle full screen fullscreen f11"
+                  onSelect={() => {
+                    void window.nerabitDesktop?.toggleFullScreen().catch((error: unknown) => {
+                      console.error("Could not toggle full screen:", error);
+                    });
+                    setCommandPaletteOpen(false);
+                  }}
+                >
+                  <span className="inline-flex min-w-0 flex-1 items-center gap-2">
+                    <Maximize2 /> Toggle full screen
+                  </span>
+                  <span className="ml-auto text-[10px] text-muted-foreground">F11</span>
+                </CommandItem>
+              )}
               <CommandItem
                 value="new note"
                 onSelect={() => {

@@ -2,8 +2,6 @@ import Dexie, { type Table } from "dexie";
 import { parse } from "yaml";
 import {
   DEFAULT_FOLDER_ID,
-  WELCOME_NOTE_MARKDOWN,
-  WELCOME_NOTE_TITLE,
   type NoteDocument,
   type NoteFolder,
   type NoteKind,
@@ -268,26 +266,13 @@ export class IndexedDbNoteStorage implements NoteStorage {
         const setting = await database.settings.get("workspace");
         if (setting?.initialized) return;
 
-        const [folders, documents] = await Promise.all([
-          database.folders.count(),
-          database.documents.count(),
-        ]);
-        if (folders === 0 && documents === 0) {
+        const folders = await database.folders.count();
+        if (folders === 0) {
           await database.folders.put({
             id: DEFAULT_FOLDER_ID,
             name: "Notes",
             position: 0,
           });
-          await database.documents.put(
-            encodeDocument({
-              id: "welcome-note",
-              title: WELCOME_NOTE_TITLE,
-              kind: "notes",
-              folderId: DEFAULT_FOLDER_ID,
-              position: 0,
-              markdown: WELCOME_NOTE_MARKDOWN,
-            }),
-          );
         }
 
         await database.settings.put({
