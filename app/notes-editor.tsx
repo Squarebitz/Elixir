@@ -101,6 +101,18 @@ function describeEditorError(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
+function attachmentKind(file: File): "image" | "audio" | "pdf" | null {
+  const extension = file.name.split(".").pop()?.toLowerCase();
+  if (file.type.startsWith("image/") || ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "avif"].includes(extension ?? "")) {
+    return "image";
+  }
+  if (file.type.startsWith("audio/") || ["mp3", "wav", "ogg", "m4a", "aac", "flac", "opus"].includes(extension ?? "")) {
+    return "audio";
+  }
+  if (file.type === "application/pdf" || extension === "pdf") return "pdf";
+  return null;
+}
+
 function readFileAsDataUrl(file: Blob) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -292,6 +304,10 @@ export function NotesEditor({
   const [contextMenuOpen, setContextMenuOpen] = useState(false);
   const [contextMenuKind, setContextMenuKind] = useState<"text" | "image">("text");
   const [contextImage, setContextImage] = useState<string | null>(null);
+  const [clickActions, setClickActions] = useState<{
+    left: number;
+    top: number;
+  } | null>(null);
   const [clipboardError, setClipboardError] = useState<string | null>(null);
   const [bubbleMenuDismissed, setBubbleMenuDismissed] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -304,6 +320,8 @@ export function NotesEditor({
   const [contextSpellWord, setContextSpellWord] = useState("");
   const [wordSuggestions, setWordSuggestions] = useState<SpellSuggestionState | null>(null);
   const linkSelectionRef = useRef<{ from: number; to: number } | null>(null);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
+  const uploadPositionRef = useRef<number | null>(null);
   const spellRequestRef = useRef(0);
   const editorRef = useRef<Editor | null>(null);
   const formatDocumentRef = useRef<() => void>(() => {});
@@ -331,11 +349,20 @@ export function NotesEditor({
 
   useEffect(() => {
     function dismissBubbleMenu(event: PointerEvent) {
-      if (event.button !== 0 || !(event.target instanceof Element)) return;
+      if (event.button !== 0) {
+        setClickActions(null);
+        return;
+      }
+      if (!(event.target instanceof Element)) return;
       if (event.target.closest(".text-format-toolbar")) return;
       if (event.target.closest(".spell-suggestion-menu")) return;
+      if (event.target.closest(".editor-click-actions")) return;
+      setClickActions(null);
       spellRequestRef.current += 1;
-      if (!event.target.closest(".notes-editor")) setWordSuggestions(null);
+      if (!event.target.closest(".notes-editor")) {
+        setWordSuggestions(null);
+        setClickActions(null);
+      }
       setBubbleMenuDismissed(!event.target.closest(".notes-editor"));
     }
 
@@ -434,7 +461,7 @@ export function NotesEditor({
       },
       handleDrop: (view, event) => {
         const files = Array.from(event.dataTransfer?.files ?? []).filter((file) =>
-          file.type.startsWith("image/"),
+          attachmentKind(file) !== null,
         );
         event.preventDefault();
         if (files.length === 0) return true;
@@ -443,36 +470,19 @@ export function NotesEditor({
           top: event.clientY,
         })?.pos;
         if (dropPosition === undefined) return true;
-        void files.reduce<Promise<number | undefined>>(
-          async (previousPosition, file) => {
-            const position = await previousPosition;
-            const dataUrl = await readFileAsDataUrl(file);
-            const extension = /\.(png|jpe?g|gif|webp|svg|bmp|avif)$/i.exec(file.name)?.[1]
-              ?.toLowerCase() ?? file.type.split("/")[1]?.replace("jpeg", "jpg") ?? "img";
-            const path = `.nerabit/attachments/${crypto.randomUUID()}.${extension}`;
-            await storage.writeVaultAttachment(path, file);
-            const insertionPosition = position ?? dropPosition;
-            if (!view.dom.isConnected) return insertionPosition;
-            const imageNode = view.state.schema.nodes.image.create({ src: dataUrl });
-            const transaction = view.state.tr.replaceRangeWith(
-              insertionPosition,
-              insertionPosition,
-              imageNode,
-            );
-            view.dispatch(transaction);
-            return insertionPosition + 1;
-          },
-          Promise.resolve(dropPosition),
-        ).catch((error: unknown) => {
-          onStorageError(`Could not save dropped image: ${describeEditorError(error)}`);
-        });
+        void insertAttachments(files, dropPosition);
         return true;
       },
       handleDOMEvents: {
         click: (_view, event) => {
           const target = event.target;
           if (!(target instanceof Element)) return false;
-          const href = target.closest("a")?.getAttribute("href");
+          const anchor = target.closest("a");
+          const href = anchor?.getAttribute("href");
+          if (href?.startsWith("data:") && anchor) {
+            anchor.download = anchor.textContent?.replace(/^(Audio|PDF):\s*/i, "") || "attachment";
+            return false;
+          }
           if (typeof href !== "string" || !href.startsWith(internalNoteLinkPrefix)) {
             return false;
           }
@@ -489,6 +499,44 @@ export function NotesEditor({
     onUpdate: ({ editor: currentEditor }) => onChange(currentEditor.getMarkdown()),
   });
   editorRef.current = editor;
+
+  async function insertAttachments(files: File[], position?: number) {
+    const currentEditor = editorRef.current;
+    if (!currentEditor || previewMode) return;
+    try {
+      let insertionPosition = position ?? currentEditor.state.selection.from;
+      for (const file of files) {
+        const kind = attachmentKind(file);
+        if (!kind) {
+          throw new Error(`"${file.name}" is not a supported image, audio, or PDF file.`);
+        }
+        const dataUrl = await readFileAsDataUrl(file);
+        const extension = file.name.split(".").pop()?.toLowerCase()
+          || file.type.split("/")[1]?.replace("jpeg", "jpg")
+          || "bin";
+        const attachmentPath = `.nerabit/attachments/${crypto.randomUUID()}.${extension}`;
+        await storage.writeVaultAttachment(attachmentPath, file);
+        if (currentEditor.isDestroyed) return;
+        const schema = currentEditor.schema;
+        const node = kind === "image"
+          ? schema.nodes.image.create({ src: dataUrl, alt: file.name })
+          : schema.text(
+              `${kind === "audio" ? "Audio" : "PDF"}: ${file.name}`,
+              [schema.marks.link.create({ href: dataUrl })],
+            );
+        const transaction = currentEditor.state.tr.replaceRangeWith(
+          insertionPosition,
+          insertionPosition,
+          node,
+        );
+        currentEditor.view.dispatch(transaction);
+        insertionPosition += node.nodeSize;
+      }
+      currentEditor.commands.focus();
+    } catch (error) {
+      onStorageError(`Could not add attachment: ${describeEditorError(error)}`);
+    }
+  }
 
   useEffect(() => {
     editor?.setEditable(!previewMode);
@@ -767,8 +815,54 @@ export function NotesEditor({
   return (
     <>
       <ContextMenu open={contextMenuOpen} onOpenChange={setContextMenuOpen}>
+        <input
+          ref={uploadInputRef}
+          type="file"
+          accept="image/*,audio/*,application/pdf,.pdf"
+          multiple
+          className="hidden"
+          aria-label="Upload image, audio, or PDF"
+          onChange={(event) => {
+            const files = Array.from(event.currentTarget.files ?? []);
+            if (files.length) void insertAttachments(files, uploadPositionRef.current ?? undefined);
+            event.currentTarget.value = "";
+          }}
+        />
         <ContextMenuTrigger
           className="block"
+          onClick={(event) => {
+            if (previewMode || event.button !== 0) return;
+            if (event.detail > 1) {
+              setClickActions(null);
+              return;
+            }
+            setClickActions(null);
+            const position = editor?.view.posAtCoords({
+              left: event.clientX,
+              top: event.clientY,
+            })?.pos;
+            if (position === undefined) return;
+            const resolved = editor?.state.doc.resolve(position);
+            if (!resolved) return;
+            const paragraph = resolved.parent;
+            if (
+              paragraph?.type.name !== "paragraph" ||
+              (paragraph.textContent.trim() &&
+                !/\s/u.test(
+                paragraph.textContent[resolved.parentOffset] ??
+                  paragraph.textContent[resolved.parentOffset - 1] ??
+                  "",
+                ))
+            ) {
+              return;
+            }
+            uploadPositionRef.current = position;
+            setClickActions({
+              left: Math.max(8, Math.min(event.clientX, window.innerWidth - 260)),
+              top: Math.max(8, Math.min(event.clientY + 10, window.innerHeight - 64)),
+            });
+          }}
+          onDoubleClick={() => setClickActions(null)}
           onMouseUp={() => {
             if (previewMode) return;
             window.setTimeout(() => void checkSelectedWord(), 0);
@@ -811,6 +905,7 @@ export function NotesEditor({
                 left: event.clientX,
                 top: event.clientY,
               })?.pos;
+              uploadPositionRef.current = position ?? editor?.state.selection.from ?? null;
               const range = editor && position !== undefined
                 ? wordRangeAtPosition(editor, position)
                 : editor && !editor.state.selection.empty
@@ -863,6 +958,15 @@ export function NotesEditor({
         )}
         {editor && contextMenuKind === "text" && (
           <ContextMenuContent className="min-w-52 font-mono text-xs">
+            <ContextMenuItem
+              onClick={() => {
+                uploadInputRef.current?.click();
+                setClickActions(null);
+              }}
+            >
+              <FilePlus2 /> Upload files
+            </ContextMenuItem>
+            <ContextMenuSeparator />
             <ContextMenuItem disabled={!hasTextSelection} onClick={() => void copySelection(true)}>
               <Scissors /> Cut
             </ContextMenuItem>
@@ -951,6 +1055,82 @@ export function NotesEditor({
           </ContextMenuContent>
         )}
       </ContextMenu>
+      {!previewMode && clickActions && (
+        <div
+          className="editor-click-actions fixed z-[85] flex min-w-44 flex-col gap-0.5 rounded-lg border border-white/[0.12] bg-[#191c26] p-1 font-mono text-xs shadow-xl"
+          style={{ left: clickActions.left, top: clickActions.top }}
+          role="menu"
+          aria-label="Editor actions"
+          onMouseDown={(event) => event.preventDefault()}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            className="flex w-full items-center gap-2 rounded px-2 py-2 text-left text-[#d4d7e0] hover:bg-white/[0.08]"
+            onClick={() => {
+              uploadInputRef.current?.click();
+              setClickActions(null);
+            }}
+          >
+            <FilePlus2 className="h-3.5 w-3.5" /> Upload files
+          </button>
+          <span className="mx-1 h-px bg-white/[0.1]" />
+          <button
+            type="button"
+            aria-label="Cut"
+            title="Cut"
+            role="menuitem"
+            disabled={!hasTextSelection}
+            className="flex w-full items-center gap-2 rounded px-2 py-2 text-left text-[#aeb3c1] hover:bg-white/[0.08] disabled:opacity-40"
+            onClick={() => {
+              void copySelection(true);
+              setClickActions(null);
+            }}
+          >
+            <Scissors className="h-3.5 w-3.5" /> Cut
+          </button>
+          <button
+            type="button"
+            aria-label="Copy"
+            title="Copy"
+            role="menuitem"
+            disabled={!hasTextSelection}
+            className="flex w-full items-center gap-2 rounded px-2 py-2 text-left text-[#aeb3c1] hover:bg-white/[0.08] disabled:opacity-40"
+            onClick={() => {
+              void copySelection();
+              setClickActions(null);
+            }}
+          >
+            <Clipboard className="h-3.5 w-3.5" /> Copy
+          </button>
+          <button
+            type="button"
+            aria-label="Paste"
+            title="Paste"
+            role="menuitem"
+            className="flex w-full items-center gap-2 rounded px-2 py-2 text-left text-[#aeb3c1] hover:bg-white/[0.08]"
+            onClick={() => {
+              void pasteSelection();
+              setClickActions(null);
+            }}
+          >
+            <Clipboard className="h-3.5 w-3.5 rotate-180" /> Paste
+          </button>
+          <button
+            type="button"
+            aria-label="Select all"
+            title="Select all"
+            role="menuitem"
+            className="flex w-full items-center rounded px-2 py-2 text-left text-[#aeb3c1] hover:bg-white/[0.08]"
+            onClick={() => {
+              editor?.chain().focus().selectAll().run();
+              setClickActions(null);
+            }}
+          >
+            Select all
+          </button>
+        </div>
+      )}
       {!previewMode && wordSuggestions && (
         <div
           className="spell-suggestion-menu fixed z-[80] min-w-56 rounded-lg border border-white/[0.1] bg-[#191c26] p-1.5 font-mono text-xs shadow-xl"

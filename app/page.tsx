@@ -1031,7 +1031,7 @@ type UserPreferences = {
 };
 
 const DEFAULT_PREFERENCES: UserPreferences = {
-  theme: "system",
+  theme: "dark",
   editorFontSize: 15,
 };
 const PREFERENCES_STORAGE_KEY = "focusboard-preferences";
