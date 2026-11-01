@@ -1,0 +1,88 @@
+{
+  "name": "task-dashboard",
+  "version": "1.0.0",
+  "description": "Nerabit is an offline-capable notes and task workspace.",
+  "author": "Nerabit",
+  "private": true,
+  "type": "module",
+  "main": "electron/main.cjs",
+  "build": {
+    "appId": "com.focusboard.desktop",
+    "productName": "Nerabit",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "icon": "build\\nerabit.ico",
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "lint": "eslint .",
+    "desktop": "npm run build && electron-builder --dir --win && start \"\" \"release\\win-unpacked\\Nerabit.exe\"",
+    "package:win": "npm run build && electron-builder --win nsis portable"
+  },
+  "dependencies": {
+    "@base-ui/react": "^1.9.0",
+    "@tiptap/extension-bubble-menu": "^3.32.1",
+    "@tiptap/extension-highlight": "^3.32.1",
+    "@tiptap/extension-image": "^3.32.1",
+    "@tiptap/extension-task-item": "^3.32.1",
+    "@tiptap/extension-task-list": "^3.32.1",
+    "@tiptap/markdown": "^3.32.1",
+    "@tiptap/pm": "^3.32.1",
+    "@tiptap/react": "^3.32.1",
+    "@tiptap/starter-kit": "^3.32.1",
+    "@tiptap/suggestion": "^3.32.1",
+    "class-variance-authority": "^0.7.1",
+    "cmdk": "^1.1.1",
+    "cn": "^0.5.1",
+    "dexie": "^4.4.1",
+    "lucide-react": "^1.66.0",
+    "minisearch": "^7.2.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@typescript-eslint/eslint-plugin": "^8.72.1",
+    "@typescript-eslint/parser": "^8.72.1",
+    "@vitejs/plugin-react": "^6.1.2",
+    "autoprefixer": "^10.4.20",
+    "electron": "^39.0.0",
+    "electron-builder": "^26.0.12",
+    "eslint": "^8.57.1",
+    "postcss": "^8.5.23",
+    "shadcn": "^4.23.0",
+    "tailwindcss": "^3.4.16",
+    "typescript": "^5.7.2",
+    "vite": "^8.3.5"
+  },
+  "overrides": {
+    "postcss": "$postcss"
+  },
+  "allowScripts": {
+    "electron@39.8.10": true,
+    "electron-winstaller@5.4.0": true
+  }
+}
