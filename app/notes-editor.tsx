@@ -28,6 +28,7 @@ import {
   ImageDown,
   ScanEye,
   Trash2,
+  LoaderCircle,
 } from "lucide-react";
 import {
   ContextMenu,
@@ -57,6 +58,36 @@ type SlashCommand = {
   description: string;
   run: (editor: Editor) => void;
 };
+
+type SpellSuggestionState = {
+  word: string;
+  suggestions: string[];
+  from: number;
+  to: number;
+  left: number;
+  top: number;
+};
+
+function wordRangeAtPosition(editor: Editor, position: number) {
+  const resolved = editor.state.doc.resolve(position);
+  const text = resolved.parent.textContent;
+  const offset = resolved.parentOffset;
+  const wordCharacter = (character: string | undefined) =>
+    character !== undefined && /[\p{L}\p{N}'’-]/u.test(character);
+  let start = offset;
+  if (!wordCharacter(text[start]) && wordCharacter(text[start - 1])) start -= 1;
+  else if (!wordCharacter(text[start])) return null;
+  let end = start + 1;
+  while (start > 0 && wordCharacter(text[start - 1])) start -= 1;
+  while (end < text.length && wordCharacter(text[end])) end += 1;
+  const word = text.slice(start, end);
+  if (word.length < 2 || word.length > 64) return null;
+  return {
+    word,
+    from: resolved.start() + start,
+    to: resolved.start() + end,
+  };
+}
 
 export type LinkedNoteOption = {
   id: string;
@@ -261,11 +292,18 @@ export function NotesEditor({
   const [bubbleMenuDismissed, setBubbleMenuDismissed] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [previewScale, setPreviewScale] = useState(1);
+  const [isFormatting, setIsFormatting] = useState(false);
   const [spellcheck, setSpellcheck] = useState<{
     word: string;
     suggestions: string[];
   } | null>(null);
+  const [contextSpellWord, setContextSpellWord] = useState("");
+  const [wordSuggestions, setWordSuggestions] = useState<SpellSuggestionState | null>(null);
   const linkSelectionRef = useRef<{ from: number; to: number } | null>(null);
+  const spellRequestRef = useRef(0);
+  const editorRef = useRef<Editor | null>(null);
+  const formatDocumentRef = useRef<() => void>(() => {});
+  const isFormattingRef = useRef(false);
 
   useEffect(() => {
     const unsubscribe = window.nerabitDesktop?.onSuggestions((data) => {
@@ -273,6 +311,7 @@ export function NotesEditor({
         word: data.misspelledWord,
         suggestions: data.dictionarySuggestions,
       });
+      if (data.misspelledWord) setContextSpellWord(data.misspelledWord);
     });
     return unsubscribe;
   }, []);
@@ -290,6 +329,9 @@ export function NotesEditor({
     function dismissBubbleMenu(event: PointerEvent) {
       if (event.button !== 0 || !(event.target instanceof Element)) return;
       if (event.target.closest(".text-format-toolbar")) return;
+      if (event.target.closest(".spell-suggestion-menu")) return;
+      spellRequestRef.current += 1;
+      if (!event.target.closest(".notes-editor")) setWordSuggestions(null);
       setBubbleMenuDismissed(!event.target.closest(".notes-editor"));
     }
 
@@ -327,7 +369,20 @@ export function NotesEditor({
     contentType: "markdown",
     immediatelyRender: false,
     editorProps: {
-      attributes: { "aria-label": "Notes editor" },
+      attributes: { "aria-label": "Notes editor", spellcheck: "true" },
+      handleKeyDown: (_view, event) => {
+        if (
+          (event.ctrlKey || event.metaKey) &&
+          !event.altKey &&
+          !event.shiftKey &&
+          event.key.toLowerCase() === "f"
+        ) {
+          event.preventDefault();
+          formatDocumentRef.current();
+          return true;
+        }
+        return false;
+      },
       handleDoubleClick: (view, position, event) => {
         if (event.target instanceof HTMLImageElement) {
           setImagePreview(event.target.currentSrc || event.target.src);
@@ -422,6 +477,7 @@ export function NotesEditor({
     },
     onUpdate: ({ editor: currentEditor }) => onChange(currentEditor.getMarkdown()),
   });
+  editorRef.current = editor;
 
   useEffect(() => {
     if (!editor || editor.getMarkdown() === content) return;
@@ -433,7 +489,162 @@ export function NotesEditor({
     action(editor);
   }
 
+  async function checkSelectedWord(position?: number) {
+    if (!editor || !window.nerabitDesktop) return;
+    const requestId = ++spellRequestRef.current;
+    const { state, view } = editor;
+    let { from, to } = state.selection;
+    let word: string;
+
+    if (position !== undefined) {
+      const range = wordRangeAtPosition(editor, position);
+      if (!range) {
+        setSpellcheck(null);
+        setWordSuggestions(null);
+        return;
+      }
+      ({ word, from, to } = range);
+    } else if (from !== to) {
+      word = state.doc.textBetween(from, to);
+      if (!/^[\p{L}\p{N}'’-]{2,64}$/u.test(word)) {
+        setWordSuggestions(null);
+        return;
+      }
+    } else {
+      const range = wordRangeAtPosition(editor, state.selection.from);
+      if (!range) {
+        setWordSuggestions(null);
+        return;
+      }
+      ({ word, from, to } = range);
+    }
+
+    const rect = view.coordsAtPos(from);
+    try {
+      const suggestions = await window.nerabitDesktop.getWordSuggestions(word);
+      if (requestId !== spellRequestRef.current) return;
+      setSpellcheck(suggestions.length ? { word, suggestions } : null);
+      if (suggestions.length === 0) {
+        setWordSuggestions(null);
+        return;
+      }
+      const left = Math.max(8, Math.min(rect.left, window.innerWidth - 248));
+      const top = rect.bottom + 8 + 92 > window.innerHeight
+        ? Math.max(8, rect.top - 100)
+        : rect.bottom + 8;
+      setWordSuggestions({ word, suggestions, from, to, left, top });
+    } catch (error) {
+      onStorageError(`Could not check spelling: ${describeEditorError(error)}`);
+      setWordSuggestions(null);
+    }
+  }
+
+  function replaceWordSuggestion(suggestion: string) {
+    if (!editor || !wordSuggestions) return;
+    editor
+      .chain()
+      .focus()
+      .insertContentAt(
+        { from: wordSuggestions.from, to: wordSuggestions.to },
+        suggestion,
+      )
+      .run();
+    setWordSuggestions(null);
+  }
+
+  async function formatDocument() {
+    const currentEditor = editorRef.current;
+    if (!currentEditor || isFormattingRef.current) return;
+    isFormattingRef.current = true;
+    setIsFormatting(true);
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    try {
+      if (currentEditor.isDestroyed) return;
+      const originalDocument = currentEditor.state.doc;
+      const spellcheck = window.nerabitDesktop;
+      if (spellcheck) {
+        const words = new Map<string, { word: string; from: number; to: number }[]>();
+        originalDocument.descendants((node, position, parent) => {
+          if (
+            !node.isText ||
+            parent?.type.name === "codeBlock" ||
+            node.marks.some((mark) => mark.type.name === "code")
+          ) {
+            return;
+          }
+          for (const match of node.text!.matchAll(/\p{L}[\p{L}\p{N}'’-]{1,63}/gu)) {
+            const word = match[0];
+            const key = word.toLowerCase();
+            const matches = words.get(key) ?? [];
+            matches.push({
+              word,
+              from: position + match.index!,
+              to: position + match.index! + word.length,
+            });
+            words.set(key, matches);
+          }
+        });
+
+        const spellings = Array.from(words.keys());
+        const corrections = new Map<string, string>();
+        for (let index = 0; index < spellings.length; index += 20) {
+          const batch = spellings.slice(index, index + 20);
+          const results = await Promise.all(
+            batch.map(async (word) => [
+              word,
+              (await spellcheck.getWordSuggestions(word))[0] ?? "",
+            ] as const),
+          );
+          for (const [word, suggestion] of results) {
+            if (suggestion && suggestion.toLowerCase() !== word) {
+              corrections.set(word, suggestion);
+            }
+          }
+        }
+
+        if (currentEditor.isDestroyed) return;
+        if (currentEditor.state.doc.eq(originalDocument) && corrections.size > 0) {
+          const transaction = currentEditor.state.tr;
+          const replacements = Array.from(words.entries()).flatMap(([key, ranges]) => {
+            const suggestion = corrections.get(key);
+            if (!suggestion) return [];
+            return ranges.map(({ word, from, to }) => {
+              const replacement = word === word.toLocaleUpperCase()
+                ? suggestion.toLocaleUpperCase()
+                : /^\p{Lu}/u.test(word)
+                  ? suggestion[0].toLocaleUpperCase() + suggestion.slice(1)
+                  : suggestion;
+              return { from, to, replacement };
+            });
+          });
+          for (const { from, to, replacement } of replacements.sort(
+            (left, right) => right.from - left.from,
+          )) {
+            const marks = originalDocument.resolve(from).marks();
+            transaction.replaceWith(from, to, currentEditor.schema.text(replacement, marks));
+          }
+          currentEditor.view.dispatch(transaction);
+        }
+      }
+
+      currentEditor.commands.focus();
+    } catch (error) {
+      onStorageError(`Could not format document: ${describeEditorError(error)}`);
+    } finally {
+      isFormattingRef.current = false;
+      setIsFormatting(false);
+    }
+  }
+  formatDocumentRef.current = () => {
+    void formatDocument();
+  };
+
   const hasTextSelection = Boolean(editor && !editor.state.selection.empty);
+  const documentText = editor?.getText({ blockSeparator: "\n" }) ?? "";
+  const characterCount = documentText.length;
+  const wordCount = documentText.trim()
+    ? documentText.trim().split(/\s+/u).length
+    : 0;
 
   async function copyImage() {
     if (!contextImage) return;
@@ -538,6 +749,17 @@ export function NotesEditor({
       <ContextMenu open={contextMenuOpen} onOpenChange={setContextMenuOpen}>
         <ContextMenuTrigger
           className="block"
+          onMouseUp={() => {
+            window.setTimeout(() => void checkSelectedWord(), 0);
+          }}
+          onKeyUp={(event) => {
+            if (event.shiftKey || event.key.startsWith("Arrow")) {
+              window.setTimeout(() => void checkSelectedWord(), 0);
+            } else {
+              spellRequestRef.current += 1;
+              setWordSuggestions(null);
+            }
+          }}
           onContextMenu={(event) => {
             event.preventDefault();
             const target = event.target;
@@ -559,8 +781,31 @@ export function NotesEditor({
             } else {
               setContextMenuKind("text");
               setContextImage(null);
+              const position = editor?.view.posAtCoords({
+                left: event.clientX,
+                top: event.clientY,
+              })?.pos;
+              const range = editor && position !== undefined
+                ? wordRangeAtPosition(editor, position)
+                : editor && !editor.state.selection.empty
+                  ? {
+                      word: editor.state.doc.textBetween(
+                        editor.state.selection.from,
+                        editor.state.selection.to,
+                      ),
+                      from: editor.state.selection.from,
+                      to: editor.state.selection.to,
+                    }
+                  : null;
+              setContextSpellWord(range?.word ?? "");
+              if (range && /^[\p{L}\p{N}'’-]{2,64}$/u.test(range.word)) {
+                void checkSelectedWord(position);
+              } else {
+                setContextSpellWord("");
+              }
             }
             setSpellcheck(null);
+            setWordSuggestions(null);
             setBubbleMenuDismissed(true);
             setContextMenuOpen(Boolean(editor));
           }}
@@ -604,24 +849,38 @@ export function NotesEditor({
             <ContextMenuItem onClick={() => editor.chain().focus().selectAll().run()}>
               Select all
             </ContextMenuItem>
-            {spellcheck?.suggestions.length ? (
+            {contextSpellWord && window.nerabitDesktop && (
               <>
                 <ContextMenuSeparator />
-                {spellcheck.suggestions.map((suggestion) => (
-                  <ContextMenuItem
-                    key={suggestion}
-                    onClick={() => window.nerabitDesktop?.replaceMisspelling(suggestion)}
-                  >
-                    {suggestion}
-                  </ContextMenuItem>
-                ))}
+                <ContextMenuSub>
+                  <ContextMenuSubTrigger>
+                    Spelling: {contextSpellWord}
+                  </ContextMenuSubTrigger>
+                  <ContextMenuSubContent className="font-mono text-xs">
+                    {spellcheck?.suggestions.length ? spellcheck.suggestions.map((suggestion) => (
+                      <ContextMenuItem
+                        key={suggestion}
+                        onClick={() => replaceWordSuggestion(suggestion)}
+                      >
+                        {suggestion}
+                      </ContextMenuItem>
+                    )) : (
+                      <ContextMenuItem disabled>No suggestions available</ContextMenuItem>
+                    )}
+                  </ContextMenuSubContent>
+                </ContextMenuSub>
                 <ContextMenuItem
-                  onClick={() => window.nerabitDesktop?.addToDictionary(spellcheck.word)}
+                  onClick={() => {
+                    window.nerabitDesktop?.addToDictionary(contextSpellWord);
+                    setContextSpellWord("");
+                    setSpellcheck(null);
+                    setWordSuggestions(null);
+                  }}
                 >
                   Add to dictionary
                 </ContextMenuItem>
               </>
-            ) : null}
+            )}
             {hasTextSelection && (
               <>
                 <ContextMenuSeparator />
@@ -666,6 +925,60 @@ export function NotesEditor({
           </ContextMenuContent>
         )}
       </ContextMenu>
+      {wordSuggestions && (
+        <div
+          className="spell-suggestion-menu fixed z-[80] min-w-56 rounded-lg border border-white/[0.1] bg-[#191c26] p-1.5 font-mono text-xs shadow-xl"
+          style={{ left: wordSuggestions.left, top: wordSuggestions.top }}
+          role="listbox"
+          aria-label={`Spelling suggestions for ${wordSuggestions.word}`}
+          onMouseDown={(event) => event.preventDefault()}
+        >
+          <p className="px-2 py-1 text-[10px] text-[#858b9c]">
+            Suggestions for “{wordSuggestions.word}”
+          </p>
+          {wordSuggestions.suggestions.map((suggestion) => (
+            <button
+              key={suggestion}
+              type="button"
+              role="option"
+              aria-selected="false"
+              className="block w-full rounded px-2 py-1.5 text-left text-[#d4d7e0] hover:bg-white/[0.06] hover:text-white"
+              onClick={() => replaceWordSuggestion(suggestion)}
+            >
+              {suggestion}
+            </button>
+          ))}
+          <button
+            type="button"
+            className="mt-1 w-full border-t border-white/[0.08] px-2 pt-1.5 text-left text-[10px] text-[#858b9c] hover:text-white"
+            onClick={() => setWordSuggestions(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+      {editor && (
+        <div className="fixed bottom-4 right-4 z-40 flex items-center justify-end gap-3 rounded-lg border border-white/[0.08] bg-[#11141c]/95 px-3 py-2 text-[11px] text-[#9298a9] shadow-lg">
+          <span aria-live="polite">
+            {characterCount} characters (including spaces) · {wordCount} words
+          </span>
+          <button
+            type="button"
+            className="rounded-md border border-white/[0.08] px-2.5 py-1.5 text-[#aeb3c1] hover:bg-white/[0.05] hover:text-[#f0efff]"
+            title="Format document (Ctrl+F)"
+            onClick={() => void formatDocument()}
+          >
+            {isFormatting && (
+              <LoaderCircle
+                aria-hidden="true"
+                className="mr-1.5 inline-block h-3.5 w-3.5 animate-spin motion-reduce:animate-none"
+              />
+            )}
+            {isFormatting ? "Formatting..." : "Format document"}
+            <span className="ml-1.5 text-[#656b7a]">Ctrl+F</span>
+          </button>
+        </div>
+      )}
       {editor && (
         <BubbleMenu
           editor={editor}

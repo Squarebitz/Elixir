@@ -1,5 +1,5 @@
 import Dexie, { type Table } from "dexie";
-import { parse, stringify } from "yaml";
+import { parse } from "yaml";
 import {
   DEFAULT_FOLDER_ID,
   WELCOME_NOTE_MARKDOWN,
@@ -10,6 +10,7 @@ import {
   type NoteStorage,
   type NoteSummary,
 } from "./storage";
+import { encodeDocument } from "./note-format";
 
 type StoredDocument = {
   id: string;
@@ -20,6 +21,13 @@ type WorkspaceSetting = {
   id: string;
   initialized?: boolean;
   value?: string | Blob;
+};
+
+export type IndexedDbExport = {
+  notes: NoteDocument[];
+  folders: NoteFolder[];
+  bookmarks: string[];
+  vaultFiles: { path: string; value: string | Blob }[];
 };
 
 class NotesDatabase extends Dexie {
@@ -117,6 +125,9 @@ function decodeDocument(document: StoredDocument): NoteDocument {
     throw new Error(`Stored note "${document.id}" has invalid YAML frontmatter.`);
   }
 
+  delete parsedMetadata.titleSize;
+  delete parsedMetadata.titleFormatting;
+
   const {
     id,
     title,
@@ -189,42 +200,6 @@ function decodeDocument(document: StoredDocument): NoteDocument {
   };
 }
 
-function encodeDocument(note: NoteDocument): StoredDocument {
-  const propertyOrder = [
-    ...new Set([
-      ...(note.propertyOrder ?? []).filter((key) =>
-        Object.prototype.hasOwnProperty.call(note.properties ?? {}, key),
-      ),
-      ...Object.keys(note.properties ?? {}),
-    ]),
-  ];
-  const serializedMetadata = stringify({
-    ...note.properties,
-    id: note.id,
-    title: note.title,
-    kind: note.kind,
-    folderId: note.folderId,
-    position: note.position,
-    ...(note.icon ? { icon: note.icon } : {}),
-    ...(note.bannerImage ? { bannerImage: note.bannerImage } : {}),
-    ...(note.bannerWidth ? { bannerWidth: note.bannerWidth } : {}),
-    ...(note.bannerPosition ? { bannerPosition: note.bannerPosition } : {}),
-    propertyOrder,
-    ...(note.createdAt ? { createdAt: note.createdAt } : {}),
-    ...(note.updatedAt ? { updatedAt: note.updatedAt } : {}),
-  });
-  const metadata = note.icon
-    ? serializedMetadata.replace(
-        /^icon:.*$/m,
-        `icon: ${JSON.stringify(note.icon)}`,
-      )
-    : serializedMetadata;
-  return {
-    id: note.id,
-    markdown: `---\n${metadata}---\n${note.markdown}`,
-  };
-}
-
 function safePathSegment(name: string): string {
   return name.replace(/[<>:"/\\|?*]/g, "-").trim() || "Untitled";
 }
@@ -255,6 +230,34 @@ function createNotePreview(markdown: string): string {
 }
 
 export class IndexedDbNoteStorage implements NoteStorage {
+  async exportExistingWorkspace(): Promise<IndexedDbExport | null> {
+    if (await database.documents.count() === 0) return null;
+    const [folders, summaries, settings] = await Promise.all([
+      this.listFolders(),
+      this.listNotes(),
+      database.settings.toArray(),
+    ]);
+    const notes = await Promise.all(
+      summaries.map(async ({ id }) => {
+        const note = await this.readNote(id);
+        if (!note) throw new Error(`Legacy note "${id}" disappeared during import.`);
+        return note;
+      }),
+    );
+    return {
+      notes,
+      folders,
+      bookmarks: await this.listBookmarks(),
+      vaultFiles: settings.flatMap((setting) => {
+        if (!setting.id.startsWith("vault-file:") || setting.value === undefined) return [];
+        return [{
+          path: setting.id.slice("vault-file:".length),
+          value: setting.value,
+        }];
+      }),
+    };
+  }
+
   async listFolders(): Promise<NoteFolder[]> {
     await database.transaction(
       "rw",

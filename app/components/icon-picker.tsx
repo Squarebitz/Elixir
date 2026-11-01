@@ -12,13 +12,12 @@ import {
   Lightbulb,
   Pencil,
   Rocket,
-  Search,
   Star,
   Target,
   X,
   BookOpen,
   Dice5,
-  Smile,
+  Shapes,
 } from "lucide-react";
 import { useMemo, useRef, useState, type KeyboardEvent, type ReactElement } from "react";
 import { Input } from "./ui/input";
@@ -42,14 +41,6 @@ const iconEntries = [
   ["pencil", "Pencil", Pencil],
   ["bookmark", "Bookmark", Bookmark],
 ] as const;
-
-const emojiCategories = {
-  Recent: ["🚀", "⭐", "📚", "💡"],
-  Smileys: ["😀", "😊", "🤔", "😎", "🥳", "😍", "😴", "😭"],
-  Work: ["💼", "📊", "📈", "📅", "🎯", "🚀", "💡", "📝"],
-  Study: ["📚", "🎓", "🧪", "🔬", "✏️", "💻", "🌍", "🔖"],
-  Objects: ["📁", "📌", "🏷️", "🗂️", "📎", "🗒️", "🧭", "✨"],
-} as const;
 
 const iconColors = [
   ["Muted gray", "#9ca3af"],
@@ -116,11 +107,8 @@ export function IconPicker({
   compact?: boolean;
 }) {
   const [internalOpen, setInternalOpen] = useState(false);
-  const [tab, setTab] = useState<"Emoji" | "Icons">("Emoji");
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState<keyof typeof emojiCategories>("Recent");
   const [color, setColor] = useState<string>(iconColors[0][1]);
-  const [recent, setRecent] = useState<string[]>([]);
   const gridRef = useRef<HTMLDivElement>(null);
   const isOpen = open ?? internalOpen;
 
@@ -130,16 +118,6 @@ export function IconPicker({
     if (!next) setQuery("");
   }
 
-  const filteredEmojis = useMemo(
-    () =>
-      Object.entries(emojiCategories)
-        .flatMap(([group, emojis]) =>
-          emojis
-            .filter((emoji) => !query || emoji.includes(query))
-            .map((emoji) => ({ emoji, group })),
-        ),
-    [query],
-  );
   const filteredIcons = useMemo(
     () =>
       iconEntries.filter(([, label, name]) =>
@@ -150,9 +128,6 @@ export function IconPicker({
 
   function chooseIcon(icon: string) {
     onChange(icon);
-    if (tab === "Emoji") {
-      setRecent((current) => [icon, ...current.filter((item) => item !== icon)].slice(0, 8));
-    }
     setIsOpen(false);
   }
 
@@ -183,7 +158,7 @@ export function IconPicker({
               {value ? (
                 <NoteIcon value={value} className={iconClassName ?? (compact ? "h-4 w-4" : "h-12 w-12")} />
               ) : (
-                <Smile className="h-4 w-4" />
+                <Shapes className="h-4 w-4" />
               )}
               {!value && triggerLabel}
             </button>
@@ -212,27 +187,13 @@ export function IconPicker({
         <Input
           autoFocus
           aria-label="Search icons"
-          placeholder="Search emoji and icons..."
+          placeholder="Search icons..."
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           className="h-9 px-3 text-xs"
         />
-        <div className="flex items-center gap-1 border-b border-border">
-          {(["Emoji", "Icons"] as const).map((item) => (
-            <button
-              key={item}
-              type="button"
-              role="tab"
-              aria-selected={tab === item}
-              onClick={() => setTab(item)}
-              className={`border-b-2 px-3 py-2 text-xs ${
-                tab === item ? "border-primary text-foreground" : "border-transparent text-muted-foreground"
-              }`}
-            >
-              {item}
-            </button>
-          ))}
-          <button
+        <div className="flex items-center gap-1 border-b border-border py-2">
+          {value && <button
             type="button"
             aria-label="Remove icon"
             title="Remove"
@@ -243,109 +204,56 @@ export function IconPicker({
             className="ml-auto rounded px-2 py-1 text-muted-foreground hover:bg-muted"
           >
             <X className="h-3.5 w-3.5" /> Remove
-          </button>
+          </button>}
           <button
             type="button"
             onClick={() => {
-              if (tab === "Emoji") {
-                const emojis = Object.values(emojiCategories).flat();
-                chooseIcon(emojis[Math.floor(Math.random() * emojis.length)]);
-              } else {
-                const [name] = iconEntries[Math.floor(Math.random() * iconEntries.length)];
-                chooseIcon(`lucide:${name}#${color.slice(1)}`);
-              }
+              const [name] = iconEntries[Math.floor(Math.random() * iconEntries.length)];
+              chooseIcon(`lucide:${name}#${color.slice(1)}`);
             }}
             className="inline-flex items-center gap-1 rounded px-2 py-1 text-muted-foreground hover:bg-muted"
           >
             <Dice5 className="h-3.5 w-3.5" /> Random
           </button>
         </div>
-        {tab === "Emoji" ? (
-          <>
-            <div className="flex gap-1 overflow-x-auto py-1">
-              {(Object.keys(emojiCategories) as (keyof typeof emojiCategories)[]).map((item) => (
-                <button
-                  type="button"
-                  key={item}
-                  onClick={() => setCategory(item)}
-                  className={`shrink-0 rounded px-2 py-1 text-[10px] ${
-                    category === item ? "bg-muted text-foreground" : "text-muted-foreground"
-                  }`}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-            <div
-              ref={gridRef}
-              role="grid"
-              aria-label={`${category} emoji`}
-              className="grid max-h-40 grid-cols-8 gap-1 overflow-y-auto"
-            >
-              {(query
-                ? [...new Set(filteredEmojis.map(({ emoji }) => emoji))]
-                : category === "Recent"
-                  ? [...recent, ...emojiCategories.Recent.filter((emoji) => !recent.includes(emoji))]
-                  : emojiCategories[category]
-              ).map((emoji) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  data-picker-option
-                  aria-label={`Choose ${emoji}`}
-                  onClick={() => chooseIcon(emoji)}
-                  className="grid h-8 w-8 place-items-center rounded text-lg hover:bg-muted focus-visible:bg-muted"
-                >
-                  {emoji}
-                </button>
-              ))}
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="flex justify-between gap-1 py-1" aria-label="Icon color">
-              {iconColors.map(([label, value]) => (
-                <button
-                  key={value}
-                  type="button"
-                  aria-label={label}
-                  aria-pressed={color === value}
-                  onClick={() => setColor(value)}
-                  className={`h-5 w-5 rounded-full border ${color === value ? "border-foreground" : "border-transparent"}`}
-                  style={{ backgroundColor: value }}
-                />
-              ))}
-            </div>
-            <div
-              ref={gridRef}
-              role="grid"
-              aria-label="Lucide icons"
-              className="grid max-h-40 grid-cols-4 gap-1 overflow-y-auto"
-            >
-              {filteredIcons.map(([name, label, Icon]) => (
-                <button
-                  key={name}
-                  type="button"
-                  data-picker-option
-                  aria-label={label}
-                  onClick={() => chooseIcon(`lucide:${name}#${color.slice(1)}`)}
-                  className="flex flex-col items-center gap-1 rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
-                >
-                  <Icon className="h-5 w-5" />
-                  <span className="text-[9px]">{label}</span>
-                </button>
-              ))}
-            </div>
-            {query && filteredIcons.length === 0 ? (
-              <p className="py-2 text-muted-foreground">No icons found</p>
-            ) : null}
-          </>
-        )}
-        {query && !filteredEmojis.length && tab === "Emoji" ? (
-          <div className="flex items-center gap-2 py-2 text-muted-foreground">
-            <Search className="h-3.5 w-3.5" /> No emoji found
+        <>
+          <div className="flex justify-between gap-1 py-1" aria-label="Icon color">
+            {iconColors.map(([label, value]) => (
+              <button
+                key={value}
+                type="button"
+                aria-label={label}
+                aria-pressed={color === value}
+                onClick={() => setColor(value)}
+                className={`h-5 w-5 rounded-full border ${color === value ? "border-foreground" : "border-transparent"}`}
+                style={{ backgroundColor: value }}
+              />
+            ))}
           </div>
-        ) : null}
+          <div
+            ref={gridRef}
+            role="grid"
+            aria-label="Lucide icons"
+            className="grid max-h-40 grid-cols-4 gap-1 overflow-y-auto"
+          >
+            {filteredIcons.map(([name, label, Icon]) => (
+              <button
+                key={name}
+                type="button"
+                data-picker-option
+                aria-label={label}
+                onClick={() => chooseIcon(`lucide:${name}#${color.slice(1)}`)}
+                className="flex flex-col items-center gap-1 rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <Icon className="h-5 w-5" />
+                <span className="text-[9px]">{label}</span>
+              </button>
+            ))}
+          </div>
+          {query && filteredIcons.length === 0 ? (
+            <p className="py-2 text-muted-foreground">No icons found</p>
+          ) : null}
+        </>
       </PopoverContent>
     </Popover>
   );

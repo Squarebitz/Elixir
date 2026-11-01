@@ -698,7 +698,7 @@ export function NoteProperties({
   }
 
   return (
-    <section className="group/properties mt-3 max-w-3xl font-mono" aria-label="Note properties">
+    <section className="group/properties mt-2 max-w-3xl font-mono" aria-label="Note properties">
       {visibleKeys.map((key) => {
         const definition = definitionsByKey.get(key);
         if (!definition) return null;
@@ -812,7 +812,7 @@ export function NoteProperties({
           render={
             <button
               type="button"
-              className="pointer-events-none mt-1 inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground opacity-0 transition-colors group-hover/properties:pointer-events-auto group-hover/properties:opacity-100 group-focus-within/properties:pointer-events-auto group-focus-within/properties:opacity-100 hover:bg-muted hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100"
+              className="pointer-events-none inline-flex h-6 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground opacity-0 transition-colors group-hover/properties:pointer-events-auto group-hover/properties:opacity-100 group-focus-within/properties:pointer-events-auto group-focus-within/properties:opacity-100 hover:bg-muted hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100"
             >
               <Plus className="h-3.5 w-3.5" />
               Add property

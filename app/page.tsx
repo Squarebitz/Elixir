@@ -15,7 +15,7 @@ import {
   PanelLeftOpen,
   Search,
   Settings,
-  Smile,
+  Shapes,
   Split,
   X,
 } from "lucide-react";
@@ -85,6 +85,7 @@ import {
   type PropertyStateUpdate,
 } from "./storage";
 import { NotesEditor, type LinkedNoteOption } from "./notes-editor";
+import { switchVault } from "./electron-storage";
 
 type Task = {
   id: string;
@@ -374,12 +375,10 @@ function FolderItem({
   openNoteId: string | null;
   actions: SidebarItemActions;
 }) {
-  const [menuOpen, setMenuOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [deleteFolderOpen, setDeleteFolderOpen] = useState(false);
   const [folderIconPickerOpen, setFolderIconPickerOpen] = useState(false);
   const [renameValue, setRenameValue] = useState(folder.name);
-  const menuRef = useRef<HTMLDivElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const childFolders = allFolders.filter((item) => item.parentId === folder.id);
   const notes = allNotes.filter((note) => note.folderId === folder.id);
@@ -395,7 +394,7 @@ function FolderItem({
     { label: "Search in folder", icon: <Search />, action: () => actions.onSearchFolder(folder.id), group: 2 },
     { label: actions.bookmarks.has(`folder:${folder.id}`) ? "Remove bookmark" : "Bookmark...", icon: <Bookmark />, action: () => actions.onToggleBookmark(`folder:${folder.id}`), group: 2 },
     { label: "Copy path", icon: <Copy />, action: () => undefined, group: 3 },
-    { label: "Change icon...", icon: <Smile />, action: () => setFolderIconPickerOpen(true), group: 4 },
+    { label: "Change icon...", icon: <Shapes />, action: () => setFolderIconPickerOpen(true), group: 4 },
     { label: "Rename...", icon: <FileText />, action: () => setRenaming(true), group: 4 },
     { label: "Delete", icon: <X />, action: () => setDeleteFolderOpen(true), group: 4, danger: true },
   ];
@@ -407,25 +406,6 @@ function FolderItem({
       renameInputRef.current?.select();
     }
   }, [renaming, folder.name]);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-
-    function closeOnOutsideClick(event: PointerEvent) {
-      if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false);
-    }
-
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") setMenuOpen(false);
-    }
-
-    document.addEventListener("pointerdown", closeOnOutsideClick);
-    document.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.removeEventListener("pointerdown", closeOnOutsideClick);
-      document.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [menuOpen]);
 
   function handleDrop(event: DragEvent<HTMLDivElement>) {
     event.preventDefault();
@@ -513,84 +493,6 @@ function FolderItem({
         >
           <span className="truncate">{folder.name}</span>
         </button>}
-        {!renaming && (
-          <div ref={menuRef} className="relative">
-            <button
-              type="button"
-              aria-label={`Options for ${folder.name}`}
-              aria-haspopup="menu"
-              aria-expanded={menuOpen}
-              title={`Options for ${folder.name}`}
-              onClick={() => setMenuOpen((open) => !open)}
-              className="flex h-7 w-6 shrink-0 items-center justify-center rounded text-sm text-[#656b7a] opacity-70 transition-colors hover:bg-white/[0.07] hover:text-white md:opacity-0 md:group-hover:opacity-100"
-            >
-              ···
-            </button>
-            {menuOpen && (
-              <div
-                role="menu"
-                aria-label={`${folder.name} folder options`}
-                className="absolute right-0 top-full z-30 mt-1 w-44 rounded-lg border border-white/[0.1] bg-[#191c26] p-1 shadow-xl"
-              >
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    setRenaming(true);
-                    setMenuOpen(false);
-                  }}
-                  className="w-full rounded-md px-3 py-2 text-left text-xs text-[#c5c9d4] transition-colors hover:bg-white/[0.06]"
-                >
-                  Rename folder
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    onCreateSubfolder(folder.id);
-                    setMenuOpen(false);
-                  }}
-                  className="w-full rounded-md px-3 py-2 text-left text-xs text-[#c5c9d4] transition-colors hover:bg-white/[0.06]"
-                >
-                  New subfolder
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    onCreateNote(folder.id);
-                    setMenuOpen(false);
-                  }}
-                  className="w-full rounded-md px-3 py-2 text-left text-xs text-[#c5c9d4] transition-colors hover:bg-white/[0.06]"
-                >
-                  New note
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    setFolderIconPickerOpen(true);
-                    setMenuOpen(false);
-                  }}
-                  className="w-full rounded-md px-3 py-2 text-left text-xs text-[#c5c9d4] transition-colors hover:bg-white/[0.06]"
-                >
-                  Change icon...
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    setDeleteFolderOpen(true);
-                    setMenuOpen(false);
-                  }}
-                  className="w-full rounded-md px-3 py-2 text-left text-xs text-[#ff929b] transition-colors hover:bg-[#ff818c]/10"
-                >
-                  Delete folder
-                </button>
-              </div>
-            )}
-          </div>
-          )}
       </Fragment>
           </ContextMenuTrigger>
           <ContextMenuContent className="min-w-52 font-mono text-xs">
@@ -1147,12 +1049,17 @@ function SettingsOverlay({
   preferences,
   onPreferencesChange,
   onClose,
+  vaultPath,
 }: {
   preferences: UserPreferences;
   onPreferencesChange: (preferences: UserPreferences) => void;
   onClose: () => void;
+  vaultPath?: string;
 }) {
   const [category, setCategory] = useState<SettingsCategory>("General");
+  const [nextVaultPath, setNextVaultPath] = useState("");
+  const [vaultBusy, setVaultBusy] = useState(false);
+  const [vaultError, setVaultError] = useState("");
 
   useEffect(() => {
     function closeOnEscape(event: KeyboardEvent) {
@@ -1164,6 +1071,41 @@ function SettingsOverlay({
   }, [onClose]);
 
   const categories: SettingsCategory[] = ["General", "Text editor", "Appearance", "About"];
+
+  async function chooseNewVault() {
+    try {
+      const selected = await window.nerabitDesktop?.chooseVaultFolder();
+      if (selected) {
+        setNextVaultPath(selected.path);
+        setVaultError(selected.warning
+          ? "This is a system folder or drive root. Choose a regular folder for safer storage."
+          : "");
+      }
+    } catch (error) {
+      setVaultError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function openVaultInExplorer() {
+    try {
+      await window.nerabitDesktop?.getVaultPath("open");
+    } catch (error) {
+      setVaultError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function changeVault(move: boolean) {
+    if (!nextVaultPath) return;
+    setVaultBusy(true);
+    setVaultError("");
+    try {
+      await switchVault(nextVaultPath, move);
+      window.location.reload();
+    } catch (error) {
+      setVaultError(error instanceof Error ? error.message : String(error));
+      setVaultBusy(false);
+    }
+  }
 
   return (
     <div
@@ -1237,11 +1179,53 @@ function SettingsOverlay({
           </div>
 
           {category === "General" && (
-            <div className="max-w-2xl rounded-xl border border-white/[0.08] bg-[#0c0f15] p-5">
-              <h3 className="text-sm font-medium text-[#e8eaf0]">Your preferences</h3>
-              <p className="mt-2 text-xs leading-6 text-[#858b9c]">
-                Settings are saved in this browser and apply to your Nerabit workspace.
-              </p>
+            <div className="max-w-2xl space-y-4">
+              {vaultPath && (
+                <div className="rounded-xl border border-white/[0.08] bg-[#0c0f15] p-5">
+                  <h3 className="text-sm font-medium text-[#e8eaf0]">Vault location</h3>
+                  <p className="mt-2 break-all text-xs leading-6 text-[#858b9c]" data-text-selectable>{vaultPath}</p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void openVaultInExplorer()}
+                    >
+                      Open in file explorer
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => void chooseNewVault()}>
+                      Change vault location
+                    </Button>
+                  </div>
+                  {nextVaultPath && (
+                    <div className="mt-5 rounded-lg border border-white/[0.08] bg-[#11141c] p-4">
+                      <p className="break-all text-xs text-[#d4d7e0]" data-text-selectable>{nextVaultPath}</p>
+                      <p className="mt-3 text-xs leading-5 text-[#858b9c]">
+                        Changing folders does not move existing notes automatically. Choose whether to switch folders or copy your notes first. The old files will never be deleted automatically.
+                      </p>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <Button size="sm" variant="outline" disabled={vaultBusy} onClick={() => void changeVault(false)}>
+                          Switch to another folder
+                        </Button>
+                        <Button size="sm" disabled={vaultBusy} onClick={() => void changeVault(true)}>
+                          Move my notes to the new folder
+                        </Button>
+                        <Button size="sm" variant="ghost" disabled={vaultBusy} onClick={() => setNextVaultPath("")}>
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  {vaultError && <p role="alert" className="mt-3 text-xs text-[#ff929b]">{vaultError}</p>}
+                </div>
+              )}
+              <div className="rounded-xl border border-white/[0.08] bg-[#0c0f15] p-5">
+                <h3 className="text-sm font-medium text-[#e8eaf0]">Your preferences</h3>
+                <p className="mt-2 text-xs leading-6 text-[#858b9c]">
+                  {vaultPath
+                    ? "Display and editor settings apply to your Nerabit workspace on this device."
+                    : "Settings are saved in this browser and apply to your Nerabit workspace."}
+                </p>
+              </div>
             </div>
           )}
 
@@ -1702,14 +1686,15 @@ function NotesPage({
               key={note.id}
               type="button"
               aria-current={note.id === block.id ? "page" : undefined}
+              title={note.title || "Untitled"}
               onClick={() => onSelectNote(note.id)}
-              className={`max-w-52 shrink-0 truncate border-b-2 px-3 py-2 text-xs transition-colors ${
+              className={`w-52 max-w-52 shrink-0 overflow-hidden border-b-2 px-3 py-2 text-xs transition-colors ${
                 note.id === block.id
                   ? "border-[#9a87ff] text-[#f0efff]"
                   : "border-transparent text-[#777d8d] hover:text-[#d4d7e0]"
               }`}
             >
-              <span className="inline-flex min-w-0 items-center gap-1.5">
+              <span className="inline-flex w-full min-w-0 items-center gap-1.5 overflow-hidden">
                 <NoteIcon value={note.icon} className="h-3.5 w-3.5 shrink-0" />
                 <span className="truncate">{note.title || "Untitled"}</span>
               </span>
@@ -1896,7 +1881,13 @@ function parseFolderIcons(contents: string | null): Record<string, string> {
   return icons;
 }
 
-export default function DashboardPage({ storage }: { storage: NoteStorage }) {
+export default function DashboardPage({
+  storage,
+  vaultPath,
+}: {
+  storage: NoteStorage;
+  vaultPath?: string;
+}) {
   const [blocks, setBlocks] = useState<DashboardBlock[]>([]);
   const [folders, setFolders] = useState<NoteFolder[]>([]);
   const [bookmarks, setBookmarks] = useState<Set<string>>(new Set());
@@ -2106,11 +2097,9 @@ export default function DashboardPage({ storage }: { storage: NoteStorage }) {
           setSettingsError("Saved settings are invalid. Default settings were loaded.");
         }
       }
+      setPreferencesLoaded(true);
     } catch (error) {
-      setSettingsError(
-        `Could not load settings: ${describeError(error)}`,
-      );
-    } finally {
+      setSettingsError(`Could not load settings: ${describeError(error)}`);
       setPreferencesLoaded(true);
     }
   }, []);
@@ -3678,6 +3667,7 @@ export default function DashboardPage({ storage }: { storage: NoteStorage }) {
           preferences={preferences}
           onPreferencesChange={setPreferences}
           onClose={() => setSettingsOpen(false)}
+          vaultPath={vaultPath}
         />
       )}
     </div>

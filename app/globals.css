@@ -343,12 +343,16 @@ img.ProseMirror-selectednode {
   min-height: 65vh;
   color: #d4d7e0;
   font-size: var(--editor-font-size, 0.95rem);
-  line-height: 1.9;
+  line-height: 1.65;
   outline: none;
 }
 
 .notes-editor .tiptap > * + * {
-  margin-top: 0.75rem;
+  margin-top: 0.45rem;
+}
+
+.notes-editor .tiptap > p + p {
+  margin-top: 0;
 }
 
 .notes-editor .tiptap h1,

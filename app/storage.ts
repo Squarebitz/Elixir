@@ -1,5 +1,4 @@
 export type NoteKind = "checklist" | "notes";
-
 export const DEFAULT_FOLDER_ID = "default-folder";
 export const WELCOME_NOTE_TITLE = "Welcome";
 export const WELCOME_NOTE_MARKDOWN = `# Welcome to Nerabit
