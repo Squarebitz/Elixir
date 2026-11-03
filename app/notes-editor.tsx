@@ -328,7 +328,7 @@ export function NotesEditor({
   const isFormattingRef = useRef(false);
 
   useEffect(() => {
-    const unsubscribe = window.nerabitDesktop?.onSuggestions((data) => {
+    const unsubscribe = window.ElixirDesktop?.onSuggestions((data) => {
       setSpellcheck({
         word: data.misspelledWord,
         suggestions: data.dictionarySuggestions,
@@ -514,7 +514,7 @@ export function NotesEditor({
         const extension = file.name.split(".").pop()?.toLowerCase()
           || file.type.split("/")[1]?.replace("jpeg", "jpg")
           || "bin";
-        const attachmentPath = `.nerabit/attachments/${crypto.randomUUID()}.${extension}`;
+        const attachmentPath = `.Elixir/attachments/${crypto.randomUUID()}.${extension}`;
         await storage.writeVaultAttachment(attachmentPath, file);
         if (currentEditor.isDestroyed) return;
         const schema = currentEditor.schema;
@@ -558,7 +558,7 @@ export function NotesEditor({
   }
 
   async function checkSelectedWord(position?: number) {
-    if (!editor || !window.nerabitDesktop) return;
+    if (!editor || !window.ElixirDesktop) return;
     const requestId = ++spellRequestRef.current;
     const { state, view } = editor;
     let { from, to } = state.selection;
@@ -589,7 +589,7 @@ export function NotesEditor({
 
     const rect = view.coordsAtPos(from);
     try {
-      const suggestions = await window.nerabitDesktop.getWordSuggestions(word);
+      const suggestions = await window.ElixirDesktop.getWordSuggestions(word);
       if (requestId !== spellRequestRef.current) return;
       setSpellcheck(suggestions.length ? { word, suggestions } : null);
       if (suggestions.length === 0) {
@@ -629,7 +629,7 @@ export function NotesEditor({
     try {
       if (currentEditor.isDestroyed) return;
       const originalDocument = currentEditor.state.doc;
-      const spellcheck = window.nerabitDesktop;
+      const spellcheck = window.ElixirDesktop;
       if (spellcheck) {
         const words = new Map<string, { word: string; from: number; to: number }[]>();
         originalDocument.descendants((node, position, parent) => {
@@ -734,8 +734,8 @@ export function NotesEditor({
       const response = await fetch(contextImage);
       if (!response.ok) throw new Error(`Image request failed (${response.status}).`);
       const dataUrl = await readFileAsDataUrl(await response.blob());
-      if (window.nerabitDesktop) {
-        await window.nerabitDesktop.saveImageAs(dataUrl);
+      if (window.ElixirDesktop) {
+        await window.ElixirDesktop.saveImageAs(dataUrl);
       } else {
         const link = document.createElement("a");
         link.href = dataUrl;
@@ -979,7 +979,7 @@ export function NotesEditor({
             <ContextMenuItem onClick={() => editor.chain().focus().selectAll().run()}>
               Select all
             </ContextMenuItem>
-            {contextSpellWord && window.nerabitDesktop && (
+            {contextSpellWord && window.ElixirDesktop && (
               <>
                 <ContextMenuSeparator />
                 <ContextMenuSub>
@@ -1001,7 +1001,7 @@ export function NotesEditor({
                 </ContextMenuSub>
                 <ContextMenuItem
                   onClick={() => {
-                    window.nerabitDesktop?.addToDictionary(contextSpellWord);
+                    window.ElixirDesktop?.addToDictionary(contextSpellWord);
                     setContextSpellWord("");
                     setSpellcheck(null);
                     setWordSuggestions(null);

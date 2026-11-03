@@ -78,8 +78,8 @@ function safeSegment(value) {
 }
 
 function readFolderTree(root) {
-  const folderTreePath = resolveVaultPath(root, ".nerabit/folder-tree.json");
-  const icons = readJson(resolveVaultPath(root, ".nerabit/folders.json"), {});
+  const folderTreePath = resolveVaultPath(root, ".Elixir/folder-tree.json");
+  const icons = readJson(resolveVaultPath(root, ".Elixir/folders.json"), {});
   try {
     const folders = JSON.parse(fs.readFileSync(folderTreePath, "utf8"));
     if (Array.isArray(folders)) {
@@ -97,7 +97,7 @@ function readFolderTree(root) {
   }
   const folders = [{ id: defaultFolderId, name: "Notes", position: 0 }];
   for (const [relative, entries] of walkDirectories(root)) {
-    if (!relative || relative.startsWith(".nerabit")) continue;
+    if (!relative || relative.startsWith(".Elixir")) continue;
     const id = `folder-${crypto.createHash("sha1").update(relative).digest("hex").slice(0, 12)}`;
     folders.push({
       id,
@@ -347,12 +347,12 @@ function validateVaultFolder(vaultPath) {
   if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) {
     throw new Error("The selected folder does not exist.");
   }
-  const probe = resolveVaultPath(resolved, `.nerabit-write-test-${crypto.randomUUID()}`);
+  const probe = resolveVaultPath(resolved, `.Elixir-write-test-${crypto.randomUUID()}`);
   try {
     fs.writeFileSync(probe, "");
     fs.unlinkSync(probe);
   } catch {
-    throw new Error("nerabit can't write to this folder. Please choose another.");
+    throw new Error("Elixir can't write to this folder. Please choose another.");
   }
   const root = path.parse(resolved).root;
   const systemPaths = [
@@ -367,16 +367,16 @@ function validateVaultFolder(vaultPath) {
 }
 
 function saveFolderTree(root, folders) {
-  writeAtomic(root, ".nerabit/folder-tree.json", JSON.stringify(folders, null, 2));
+  writeAtomic(root, ".Elixir/folder-tree.json", JSON.stringify(folders, null, 2));
 }
 
 function ensureVaultInitialized(root) {
-  fs.mkdirSync(resolveVaultPath(root, ".nerabit"), { recursive: true });
-  const settingsPath = resolveVaultPath(root, ".nerabit/settings.json");
+  fs.mkdirSync(resolveVaultPath(root, ".Elixir"), { recursive: true });
+  const settingsPath = resolveVaultPath(root, ".Elixir/settings.json");
   if (!fs.existsSync(settingsPath)) {
-    writeAtomic(root, ".nerabit/settings.json", JSON.stringify({ bookmarks: [] }, null, 2));
+    writeAtomic(root, ".Elixir/settings.json", JSON.stringify({ bookmarks: [] }, null, 2));
   }
-  const treePath = resolveVaultPath(root, ".nerabit/folder-tree.json");
+  const treePath = resolveVaultPath(root, ".Elixir/folder-tree.json");
   if (!fs.existsSync(treePath)) {
     saveFolderTree(root, [{ id: defaultFolderId, name: "Notes", position: 0 }]);
   }
@@ -404,8 +404,8 @@ ipcMain.handle("vault:choose-folder", async (event, selectedPath) => {
   const owner = BrowserWindow.fromWebContents(event.sender);
   const documentsPath = app.getPath("documents");
   const { canceled, filePaths } = await dialog.showOpenDialog(owner, {
-    title: "Choose your Nerabit vault",
-    defaultPath: path.join(documentsPath, "nerabit"),
+    title: "Choose your Elixir vault",
+    defaultPath: path.join(documentsPath, "Elixir"),
     buttonLabel: "Choose folder",
     properties: ["openDirectory", "createDirectory"],
   });
@@ -416,7 +416,7 @@ ipcMain.handle("vault:choose-folder", async (event, selectedPath) => {
 ipcMain.handle("vault:list-notes", () => {
   const root = configuredRoot();
   const folders = readFolderTree(root);
-  const folderTreePath = resolveVaultPath(root, ".nerabit/folder-tree.json");
+  const folderTreePath = resolveVaultPath(root, ".Elixir/folder-tree.json");
   if (!folders.some((folder) => folder.id === defaultFolderId)) {
     folders.unshift({ id: defaultFolderId, name: "Notes", position: 0 });
   }
@@ -427,7 +427,7 @@ ipcMain.handle("vault:list-notes", () => {
     return summary;
   });
   if (!fs.existsSync(folderTreePath)) saveFolderTree(root, folders);
-  const bookmarks = readJson(resolveVaultPath(root, ".nerabit/settings.json"), {}).bookmarks ?? [];
+  const bookmarks = readJson(resolveVaultPath(root, ".Elixir/settings.json"), {}).bookmarks ?? [];
   if (!Array.isArray(bookmarks) || !bookmarks.every((key) => typeof key === "string")) {
     throw new Error("Vault bookmarks are invalid.");
   }
@@ -437,7 +437,7 @@ ipcMain.handle("vault:list-notes", () => {
 ipcMain.handle("vault:read-note", (_event, id) => {
   const root = configuredRoot();
   if (typeof id !== "string") throw new Error("The note identifier is invalid.");
-  if (id.startsWith(".nerabit/") || id.startsWith(".nerabit\\")) {
+  if (id.startsWith(".Elixir/") || id.startsWith(".Elixir\\")) {
     const filePath = resolveVaultPath(root, id);
     try { return fs.readFileSync(filePath, "utf8"); } catch (error) {
       if (error.code === "ENOENT") return null;
@@ -478,7 +478,7 @@ ipcMain.handle("vault:write-note", async (_event, value) => {
     return destination;
   }
   if (typeof value.path === "string" && typeof value.contents === "string") {
-    if (value.path.replace(/\\/g, "/") === ".nerabit/settings.json") {
+    if (value.path.replace(/\\/g, "/") === ".Elixir/settings.json") {
       const current = readJson(resolveVaultPath(root, value.path), {});
       const incoming = JSON.parse(value.contents);
       if (!incoming || typeof incoming !== "object" || Array.isArray(incoming)) {
@@ -508,12 +508,12 @@ ipcMain.handle("vault:write-note", async (_event, value) => {
     return;
   }
   if (typeof value.bookmark === "string" && typeof value.bookmarked === "boolean") {
-    const filePath = resolveVaultPath(root, ".nerabit/settings.json");
+    const filePath = resolveVaultPath(root, ".Elixir/settings.json");
     const settings = readJson(filePath, {});
     const bookmarks = new Set(Array.isArray(settings.bookmarks) ? settings.bookmarks : []);
     if (value.bookmarked) bookmarks.add(value.bookmark);
     else bookmarks.delete(value.bookmark);
-    writeAtomic(root, ".nerabit/settings.json", JSON.stringify({ ...settings, bookmarks: [...bookmarks] }, null, 2));
+    writeAtomic(root, ".Elixir/settings.json", JSON.stringify({ ...settings, bookmarks: [...bookmarks] }, null, 2));
     return;
   }
   if (typeof value.id !== "string" || typeof value.markdown !== "string") {
@@ -723,7 +723,7 @@ function createWindow() {
   const savedState = readWindowState();
   const isMac = process.platform === "darwin";
   const window = new BrowserWindow({
-    title: "nerabit",
+    title: "Elixir",
     titleBarStyle: "hidden",
     ...(isMac
       ? { trafficLightPosition: { x: 16, y: 14 } }

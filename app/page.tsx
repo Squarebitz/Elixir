@@ -270,7 +270,7 @@ function SidebarNoteItem({
   );
 }
 
-function NerabitMark({ className }: { className: string }) {
+function ElixirMark({ className }: { className: string }) {
   return (
     <svg
       aria-hidden="true"
@@ -1079,7 +1079,7 @@ function SettingsOverlay({
 
   async function chooseNewVault() {
     try {
-      const selected = await window.nerabitDesktop?.chooseVaultFolder();
+      const selected = await window.ElixirDesktop?.chooseVaultFolder();
       if (selected) {
         setNextVaultPath(selected.path);
         setVaultError(selected.warning
@@ -1093,7 +1093,7 @@ function SettingsOverlay({
 
   async function openVaultInExplorer() {
     try {
-      await window.nerabitDesktop?.getVaultPath("open");
+      await window.ElixirDesktop?.getVaultPath("open");
     } catch (error) {
       setVaultError(error instanceof Error ? error.message : String(error));
     }
@@ -1227,11 +1227,11 @@ function SettingsOverlay({
                 <h3 className="text-sm font-medium text-[#e8eaf0]">Your preferences</h3>
                 <p className="mt-2 text-xs leading-6 text-[#858b9c]">
                   {vaultPath
-                    ? "Display and editor settings apply to your Nerabit workspace on this device."
-                    : "Settings are saved in this browser and apply to your Nerabit workspace."}
+                    ? "Display and editor settings apply to your Elixir workspace on this device."
+                    : "Settings are saved in this browser and apply to your Elixir workspace."}
                 </p>
               </div>
-              {window.nerabitDesktop && (
+              {window.ElixirDesktop && (
                 <div className="rounded-xl border border-white/[0.08] bg-[#0c0f15] p-5">
                   <h3 className="text-sm font-medium text-[#e8eaf0]">Keyboard shortcuts</h3>
                   <dl className="mt-3 space-y-3 text-xs">
@@ -1295,7 +1295,7 @@ function SettingsOverlay({
             <div className="max-w-2xl rounded-xl border border-white/[0.08] bg-[#0c0f15] p-5">
               <h3 className="text-sm font-medium text-[#e8eaf0]">Theme</h3>
               <p className="mt-1 text-xs text-[#858b9c]">
-                Choose how Nerabit looks on this device.
+                Choose how Elixir looks on this device.
               </p>
               <div className="mt-5 grid gap-2 sm:grid-cols-3">
                 {(["system", "light", "dark"] as const).map((theme) => (
@@ -1326,7 +1326,7 @@ function SettingsOverlay({
 
           {category === "About" && (
             <div className="max-w-2xl rounded-xl border border-white/[0.08] bg-[#0c0f15] p-5">
-              <h3 className="text-sm font-medium text-[#e8eaf0]">Nerabit</h3>
+              <h3 className="text-sm font-medium text-[#e8eaf0]">Elixir</h3>
               <p className="mt-2 text-xs leading-6 text-[#858b9c]">
                 A quiet place for ideas, plans, and everything you want to remember.
               </p>
@@ -2025,7 +2025,7 @@ export default function DashboardPage({
   const [splitRatio, setSplitRatio] = useState(0.5);
   const [activeSection, setActiveSection] = useState<WorkspaceSection>("folders");
   const [openNotesId, setOpenNotesId] = useState<string | null>(() =>
-    window.localStorage.getItem("nerabit-last-note"),
+    window.localStorage.getItem("Elixir-last-note"),
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [preferences, setPreferences] = useState(DEFAULT_PREFERENCES);
@@ -2065,7 +2065,7 @@ export default function DashboardPage({
   );
 
   useEffect(() => {
-    const desktop = window.nerabitDesktop;
+    const desktop = window.ElixirDesktop;
     if (!desktop) return;
     let active = true;
 
@@ -2084,7 +2084,7 @@ export default function DashboardPage({
       if (!active) return;
       setIsFullScreen(fullScreen);
       if (fullScreen && !fullScreenRef.current) {
-        const key = "nerabit-fullscreen-hint-count";
+        const key = "Elixir-fullscreen-hint-count";
         const count = Number(window.localStorage.getItem(key) ?? 0);
         if (count < 3) {
           window.localStorage.setItem(key, String(count + 1));
@@ -2115,7 +2115,7 @@ export default function DashboardPage({
   }, []);
 
   useEffect(() => {
-    const desktop = window.nerabitDesktop;
+    const desktop = window.ElixirDesktop;
     if (!desktop) return;
 
     function exitFullScreenOnEscape(event: KeyboardEvent) {
@@ -2128,7 +2128,7 @@ export default function DashboardPage({
       );
       if (blockingUi) return;
       event.preventDefault();
-      void window.nerabitDesktop?.exitFullScreen().catch((error: unknown) => {
+      void window.ElixirDesktop?.exitFullScreen().catch((error: unknown) => {
         console.error("Could not exit full screen:", error);
       });
     }
@@ -2233,7 +2233,7 @@ export default function DashboardPage({
 
   useEffect(() => {
     try {
-      const saved = window.localStorage.getItem("nerabit-sidebar");
+      const saved = window.localStorage.getItem("Elixir-sidebar");
       if (saved) {
         const parsed: unknown = JSON.parse(saved);
         if (
@@ -2270,7 +2270,7 @@ export default function DashboardPage({
     if (!sidebarWidthLoaded) return;
     try {
       window.localStorage.setItem(
-        "nerabit-sidebar",
+        "Elixir-sidebar",
         JSON.stringify({ collapsed: sidebarCollapsed, width: sidebarWidth }),
       );
     } catch (error) {
@@ -2325,7 +2325,7 @@ export default function DashboardPage({
           : "dark"
         : preferences.theme;
       document.documentElement.dataset.theme = theme;
-      void window.nerabitDesktop?.setTheme(theme).catch((error: unknown) => {
+      void window.ElixirDesktop?.setTheme(theme).catch((error: unknown) => {
         console.error("Could not update the native title bar theme:", error);
       });
     };
@@ -2344,7 +2344,7 @@ export default function DashboardPage({
       try {
         const [foldersFromStorage, folderIconContents] = await Promise.all([
           storage.listFolders(),
-          storage.readVaultFile(".nerabit/folders.json"),
+          storage.readVaultFile(".Elixir/folders.json"),
         ]);
         const folderIcons = parseFolderIcons(folderIconContents);
         const loadedFolders = foldersFromStorage.map((folder) => ({
@@ -2436,7 +2436,7 @@ export default function DashboardPage({
   }, [blocks, isLoaded, openNotesId]);
 
   useEffect(() => {
-    if (openNotesId) window.localStorage.setItem("nerabit-last-note", openNotesId);
+    if (openNotesId) window.localStorage.setItem("Elixir-last-note", openNotesId);
   }, [openNotesId]);
 
   useEffect(() => {
@@ -2900,7 +2900,7 @@ export default function DashboardPage({
     else delete nextIcons[folderId];
     try {
       await storage.writeVaultFile(
-        ".nerabit/folders.json",
+        ".Elixir/folders.json",
         JSON.stringify(nextIcons, null, 2),
       );
       folderIconsRef.current = nextIcons;
@@ -3193,15 +3193,15 @@ export default function DashboardPage({
   if (!isLoaded) return <main className="min-h-screen" />;
 
   return (
-    <div className={`flex min-h-screen flex-col md:flex-row${isFullScreen ? " is-fullscreen" : ""}${window.nerabitDesktop ? ` native-titlebar-${window.nerabitDesktop.platform}` : ""}`}>
-      {window.nerabitDesktop && !isFullScreen && (
+    <div className={`flex min-h-screen flex-col md:flex-row${isFullScreen ? " is-fullscreen" : ""}${window.ElixirDesktop ? ` native-titlebar-${window.ElixirDesktop.platform}` : ""}`}>
+      {window.ElixirDesktop && !isFullScreen && (
         <div
           className="native-window-drag-region"
           aria-hidden="true"
-          onDoubleClick={() => window.nerabitDesktop?.toggleWindowMaximize()}
+          onDoubleClick={() => window.ElixirDesktop?.toggleWindowMaximize()}
         />
       )}
-      {isFullScreen && window.nerabitDesktop && (
+      {isFullScreen && window.ElixirDesktop && (
         <>
           <div
             className="fullscreen-top-drag-area"
@@ -3216,7 +3216,7 @@ export default function DashboardPage({
                 fullScreenBarTimer.current = null;
               }, 1500);
             }}
-            onDoubleClick={() => window.nerabitDesktop?.toggleWindowMaximize()}
+            onDoubleClick={() => window.ElixirDesktop?.toggleWindowMaximize()}
           />
           <div
             className={`fullscreen-exit-bar${showFullScreenBar ? " is-visible" : ""}`}
@@ -3238,7 +3238,7 @@ export default function DashboardPage({
               aria-label="Exit full screen (F11)"
               title="Exit full screen (F11)"
               onClick={() => {
-                void window.nerabitDesktop?.exitFullScreen().catch((error: unknown) => {
+                void window.ElixirDesktop?.exitFullScreen().catch((error: unknown) => {
                   console.error("Could not exit full screen:", error);
                 });
               }}
@@ -3541,10 +3541,10 @@ export default function DashboardPage({
       ) : (
       <div className="mx-auto max-w-6xl px-5 pb-16 pt-8 sm:px-8 sm:pt-12">
         <header className="mb-14 flex items-center justify-between border-b border-white/[0.07] pb-5">
-          <a href="/" className="flex items-center gap-3" aria-label="Nerabit home">
-            <NerabitMark className="h-8 w-8 text-[#7763f6]" />
+          <a href="/" className="flex items-center gap-3" aria-label="Elixir home">
+            <ElixirMark className="h-8 w-8 text-[#7763f6]" />
             <span className="text-sm font-medium tracking-tight text-[#e8eaf0]">
-              nerabit<span className="text-[#8f83e9]">.</span>
+              Elixir<span className="text-[#8f83e9]">.</span>
             </span>
           </a>
           <span className="text-[11px] uppercase tracking-[0.14em] text-[#6d7382]">
@@ -3726,11 +3726,11 @@ export default function DashboardPage({
           <CommandList>
             <CommandEmpty>No notes or commands found.</CommandEmpty>
             <CommandGroup heading="Actions">
-              {window.nerabitDesktop && (
+              {window.ElixirDesktop && (
                 <CommandItem
                   value="toggle full screen fullscreen f11"
                   onSelect={() => {
-                    void window.nerabitDesktop?.toggleFullScreen().catch((error: unknown) => {
+                    void window.ElixirDesktop?.toggleFullScreen().catch((error: unknown) => {
                       console.error("Could not toggle full screen:", error);
                     });
                     setCommandPaletteOpen(false);

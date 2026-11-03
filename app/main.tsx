@@ -15,7 +15,7 @@ if (!rootElement) {
 createRoot(rootElement).render(
   <StrictMode>
     <TooltipProvider>
-      {window.nerabitDesktop
+      {window.ElixirDesktop
         ? <DesktopGate />
         : <DashboardPage storage={new IndexedDbNoteStorage()} />}
     </TooltipProvider>

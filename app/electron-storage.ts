@@ -13,8 +13,8 @@ type DesktopWorkspace = {
 };
 
 function desktopApi() {
-  const api = window.nerabitDesktop;
-  if (!api) throw new Error("The Nerabit desktop storage API is unavailable.");
+  const api = window.ElixirDesktop;
+  if (!api) throw new Error("The Elixir desktop storage API is unavailable.");
   return api;
 }
 

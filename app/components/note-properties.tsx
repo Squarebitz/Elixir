@@ -215,7 +215,7 @@ export function NoteProperties({
     let active = true;
     async function loadDefinitions() {
       try {
-        const contents = await storage.readVaultFile(".nerabit/properties.json");
+        const contents = await storage.readVaultFile(".Elixir/properties.json");
         if (!contents) return;
         const parsed: unknown = JSON.parse(contents);
         if (!Array.isArray(parsed) || !parsed.every(isPropertyDefinition)) {
@@ -233,10 +233,10 @@ export function NoteProperties({
     }
     void loadDefinitions();
     const reload = () => void loadDefinitions();
-    window.addEventListener("nerabit-property-definitions-changed", reload);
+    window.addEventListener("Elixir-property-definitions-changed", reload);
     return () => {
       active = false;
-      window.removeEventListener("nerabit-property-definitions-changed", reload);
+      window.removeEventListener("Elixir-property-definitions-changed", reload);
     };
   }, [storage]);
 
@@ -306,12 +306,12 @@ export function NoteProperties({
   async function saveDefinitions(next: PropertyDefinition[]): Promise<boolean> {
     try {
       await storage.writeVaultFile(
-        ".nerabit/properties.json",
+        ".Elixir/properties.json",
         JSON.stringify(next, null, 2),
       );
       setStoredDefinitions(next);
       setPropertyError(null);
-      window.dispatchEvent(new CustomEvent("nerabit-property-definitions-changed"));
+      window.dispatchEvent(new CustomEvent("Elixir-property-definitions-changed"));
       return true;
     } catch (error) {
       const message =

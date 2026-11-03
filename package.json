@@ -1,14 +1,14 @@
 {
   "name": "task-dashboard",
   "version": "1.0.0",
-  "description": "Nerabit is an offline-capable notes and task workspace.",
-  "author": "Nerabit",
+  "description": "Elixir is an offline-capable notes and task workspace.",
+  "author": "Elixir",
   "private": true,
   "type": "module",
   "main": "electron/main.cjs",
   "build": {
     "appId": "com.focusboard.desktop",
-    "productName": "Nerabit",
+    "productName": "Elixir",
     "directories": {
       "output": "release"
     },
@@ -18,7 +18,7 @@
       "package.json"
     ],
     "win": {
-      "icon": "build\\nerabit.ico",
+      "icon": "build\\Elixir.ico",
       "target": [
         "nsis",
         "portable"
@@ -36,7 +36,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "lint": "eslint .",
-    "desktop": "npm run build && electron-builder --dir --win && start \"\" \"release\\win-unpacked\\Nerabit.exe\"",
+    "desktop": "npm run build && electron-builder --dir --win && start \"\" \"release\\win-unpacked\\Elixir.exe\"",
     "package:win": "npm run build && electron-builder --win nsis portable"
   },
   "dependencies": {

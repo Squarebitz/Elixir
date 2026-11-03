@@ -1,9 +1,9 @@
 export type NoteKind = "checklist" | "notes";
 export const DEFAULT_FOLDER_ID = "default-folder";
 export const WELCOME_NOTE_TITLE = "Welcome";
-export const WELCOME_NOTE_MARKDOWN = `# Welcome to Nerabit
+export const WELCOME_NOTE_MARKDOWN = `# Welcome to Elixir
 
-Nerabit is your personal space for notes, ideas, and plans.
+Elixir is your personal space for notes, ideas, and plans.
 
 ## Organize with folders
 Create folders in the sidebar for projects or topics. Use a folder's options to add notes or make nested subfolders to any depth. Expand a folder to see its notes and subfolders. You can reorder sibling folders or delete a folder from its options.

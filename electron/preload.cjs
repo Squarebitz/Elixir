@@ -1,6 +1,6 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
-contextBridge.exposeInMainWorld("nerabitDesktop", {
+contextBridge.exposeInMainWorld("ElixirDesktop", {
   platform: process.platform,
   chooseVaultFolder(path) {
     return ipcRenderer.invoke("vault:choose-folder", path);

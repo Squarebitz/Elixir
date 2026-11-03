@@ -38,7 +38,7 @@ export function DesktopGate() {
     setChecking(true);
     setError("");
     try {
-      const state = await window.nerabitDesktop!.getVaultPath();
+      const state = await window.ElixirDesktop!.getVaultPath();
       setVault(state);
       setSelectedPath("");
       setLegacy(null);
@@ -57,7 +57,7 @@ export function DesktopGate() {
   async function pickFolder() {
     setError("");
     try {
-      const result = await window.nerabitDesktop!.chooseVaultFolder();
+      const result = await window.ElixirDesktop!.chooseVaultFolder();
       if (!result) return;
       setSelectedPath(result.path);
       setWarning(result.warning);
@@ -89,7 +89,7 @@ export function DesktopGate() {
     setBusy(true);
     setError("");
     try {
-      await window.nerabitDesktop!.chooseVaultFolder(selectedPath);
+      await window.ElixirDesktop!.chooseVaultFolder(selectedPath);
       const storage = new ElectronNoteStorage();
       if (legacy && legacyDecision === "import") await importLegacy(storage, legacy);
       setVault({ path: selectedPath, valid: true });
@@ -111,7 +111,7 @@ export function DesktopGate() {
       <section className="w-full max-w-xl rounded-2xl border border-white/[0.09] bg-[#11141c] p-7 shadow-2xl sm:p-10">
         <div className="mb-7 flex justify-center"><Logo /></div>
         <h1 className="text-center text-2xl font-medium tracking-tight text-[#f0efff]">
-          Where should nerabit keep your notes?
+          Where should Elixir keep your notes?
         </h1>
         <p className="mx-auto mt-3 max-w-md text-center text-sm leading-6 text-[#9298a9]">
           Your notes are saved as plain Markdown files in a folder on your device.

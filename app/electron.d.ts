@@ -2,7 +2,7 @@ import type { NoteDocument, NoteFolder, NoteSummary } from "./storage";
 
 declare global {
   interface Window {
-    nerabitDesktop?: {
+    ElixirDesktop?: {
       platform: string;
       chooseVaultFolder(path?: string): Promise<{
         path: string;

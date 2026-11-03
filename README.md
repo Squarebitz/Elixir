@@ -1,4 +1,4 @@
-# Nerabit
+# Elixir
 
 An offline-capable notes and task dashboard built with Vite, React, TypeScript, Tailwind, JetBrains Mono, and Electron. The Electron app stores notes as Markdown files with YAML frontmatter in a user-selected vault; browser development uses IndexedDB (Dexie).
 
@@ -15,7 +15,7 @@ Open [http://localhost:5173](http://localhost:5173). Use `npm run build` to type
 
 ## Desktop app
 
-The Electron app loads its renderer from the local production build and does not require an internet connection to use notes, folders, or settings. On first launch, choose a vault folder or open an existing Markdown/Obsidian folder. The vault path is remembered in the Electron user-data directory, while notes and vault metadata live in the selected folder (`.nerabit/`).
+The Electron app loads its renderer from the local production build and does not require an internet connection to use notes, folders, or settings. On first launch, choose a vault folder or open an existing Markdown/Obsidian folder. The vault path is remembered in the Electron user-data directory, while notes and vault metadata live in the selected folder (`.Elixir/`).
 
 ```bash
 npm run desktop
